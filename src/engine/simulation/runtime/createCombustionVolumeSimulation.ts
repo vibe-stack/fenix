@@ -702,8 +702,27 @@ function createSourceShader() {
         normalized.y * 8.8,
         local.x * 6.1 + params.time * 0.85,
       ));
-      let sourceColumn = exp(-pow(radialDistance / (0.115 + normalized.y * 0.1), 2.0));
-      let source = sourceColumn * plumeFade * (0.64 + baseNoise * 0.36) * sourceEnabled * dt * 2.6;
+      let emberNoise = hash33(vec3<f32>(
+        local.x * 11.0 - params.time * 2.2,
+        normalized.y * 13.0 + params.time * 0.9,
+        local.z * 11.0 + params.time * 1.4,
+      ));
+      let pulse = 0.74 + 0.26 * max(0.0, sin(params.time * 10.5 + local.x * 7.2 - local.z * 5.4));
+      let lobeAngle = params.time * 1.45 + normalized.y * 9.0 + baseNoise * 3.14159;
+      let lobeOffset = vec2<f32>(cos(lobeAngle), sin(lobeAngle)) * (0.06 + normalized.y * 0.32);
+      let sideLobeDistance = length(local.xz - lobeOffset);
+      let counterLobeDistance = length(local.xz + lobeOffset * vec2<f32>(0.82, 0.82));
+      let coreColumn = exp(-pow(radialDistance / (0.085 + normalized.y * 0.08), 2.0));
+      let sideColumn = exp(-pow(sideLobeDistance / (0.075 + normalized.y * 0.18), 2.0));
+      let counterColumn = exp(-pow(counterLobeDistance / (0.07 + normalized.y * 0.2), 2.0));
+      let smokeShelf = exp(-pow(radialDistance / (0.16 + normalized.y * 0.28), 2.0)) * smoothstep(0.22, 0.78, normalized.y);
+      let source = (coreColumn * 1.2 + sideColumn * 0.82 + counterColumn * 0.68)
+        * plumeFade
+        * (0.58 + baseNoise * 0.42)
+        * sourceEnabled
+        * dt
+        * 2.7;
+      let smokeSource = smokeShelf * (0.24 + emberNoise * 0.46) * dt * 0.95;
       let swirl = (swirlNoise - 0.5) * 2.0;
 
       var density = densityField[index];
@@ -712,20 +731,22 @@ function createSourceShader() {
       var turbulence = turbulenceField[index];
       var velocity = velocityField[index].xyz;
 
-      density = clamp01(density + source * 1.5 - dt * 0.015);
-      temperature = clamp01(temperature + source * 2.0);
-      fuel = clamp01(fuel + source * 1.7);
-      turbulence = clamp01(max(turbulence * 0.965, abs(swirl) * source * 1.65));
+      density = clamp01(density + source * 0.95 + smokeSource - dt * 0.013);
+      temperature = clamp01(temperature + source * (1.9 + pulse * 0.45));
+      fuel = clamp01(fuel + coreColumn * plumeFade * sourceEnabled * dt * (1.7 + pulse * 0.35));
+      turbulence = clamp01(max(turbulence * 0.955, abs(swirl) * source * 2.1 + smokeSource * 0.75));
 
       let burn = min(fuel, max(0.0, temperature * 0.44 + density * 0.18) * dt * 1.45);
       fuel = clamp01(fuel - burn);
-      temperature = clamp01(temperature + burn * 1.32 - dt * (0.1 + density * 0.08));
-      density = clamp01(density + burn * 0.31);
-      turbulence = clamp01(max(turbulence, burn * 0.75 + baseNoise * 0.12));
+      temperature = clamp01(temperature + burn * 1.32 - dt * (0.09 + density * 0.075));
+      density = clamp01(density + burn * 0.42 + smokeSource * 0.42);
+      turbulence = clamp01(max(turbulence, burn * 0.88 + baseNoise * 0.16 + emberNoise * 0.08));
 
-      velocity.y = clamp(velocity.y + (temperature * 2.1 - density * 0.42) * dt * 2.45, -4.0, 8.6);
-      velocity.x = velocity.x * 0.988 + (-local.z * 1.1 + swirl * 0.72) * source * 1.9;
-      velocity.z = velocity.z * 0.988 + (local.x * 1.1 - swirl * 0.72) * source * 1.9;
+      let horizontalBurst = (0.35 + normalized.y * 1.35) * (0.65 + turbulence * 0.7);
+      let radialLift = max(0.0, 1.0 - radialDistance * (1.7 - normalized.y * 0.4));
+      velocity.y = clamp(velocity.y + (temperature * 2.15 - density * 0.38 + radialLift * pulse * 0.9) * dt * 2.6, -4.0, 8.8);
+      velocity.x = velocity.x * 0.985 + (-local.z * (1.15 + normalized.y * 0.9) + swirl * 1.05 + lobeOffset.x * 2.6) * source * horizontalBurst;
+      velocity.z = velocity.z * 0.985 + (local.x * (1.15 + normalized.y * 0.9) - swirl * 1.05 + lobeOffset.y * 2.6) * source * horizontalBurst;
 
       if (id.x == 0u || id.y == 0u || id.z == 0u || id.x == volumeInfo.width - 1u || id.y == volumeInfo.height - 1u || id.z == volumeInfo.depth - 1u) {
         velocity = vec3<f32>(0.0);
@@ -851,6 +872,10 @@ function createScalarAdvectionShader() {
 
     fn clamp01(value: f32) -> f32 {
       return clamp(value, 0.0, 1.0);
+    }
+
+    fn hash33(position: vec3<f32>) -> f32 {
+      return fract(sin(dot(position, vec3<f32>(127.1, 311.7, 74.7))) * 43758.5453);
     }
 
     fn readVelocity(coord: vec3<u32>) -> vec3<f32> {
@@ -1011,13 +1036,33 @@ function createScalarAdvectionShader() {
 
       let index = id.x + volumeInfo.width * (id.y + volumeInfo.height * id.z);
       let coord = vec3<f32>(id) + vec3<f32>(0.5);
+      let normalized = coord / vec3<f32>(f32(volumeInfo.width), f32(volumeInfo.height), f32(volumeInfo.depth));
       let backPosition = coord - sampleVelocity(coord - vec3<f32>(0.5)) * params.deltaTime;
-      let samplePosition = backPosition - vec3<f32>(0.5);
+      var samplePosition = backPosition - vec3<f32>(0.5);
+      let sampledTurbulence = sampleTurbulence(samplePosition);
+      let curlPhase = params.time * 0.9 + normalized.y * 8.6;
+      let jitter = hash33(vec3<f32>(
+        normalized.x * 9.4 + params.time * 0.25,
+        normalized.y * 11.7 - params.time * 0.42,
+        normalized.z * 9.4 + params.time * 0.31,
+      ));
+      let swirlVector = vec3<f32>(
+        sin(curlPhase + normalized.z * 7.4 + jitter * 3.0),
+        cos(curlPhase * 0.75 + normalized.x * 5.9),
+        cos(curlPhase + normalized.x * 7.4 - jitter * 3.0),
+      );
+      samplePosition += swirlVector * (0.08 + sampledTurbulence * 0.55) * (0.45 + normalized.y * 1.5);
 
-      densityTarget[index] = clamp01(sampleDensity(samplePosition) * 0.996);
-      temperatureTarget[index] = clamp01(sampleTemperature(samplePosition) * 0.989);
-      fuelTarget[index] = clamp01(sampleFuel(samplePosition) * 0.993);
-      turbulenceTarget[index] = clamp01(sampleTurbulence(samplePosition) * 0.978);
+      let density = sampleDensity(samplePosition);
+      let temperature = sampleTemperature(samplePosition);
+      let fuel = sampleFuel(samplePosition);
+      let turbulence = sampleTurbulence(samplePosition);
+      let smokeBloom = smoothstep(0.18, 0.85, normalized.y) * turbulence * max(0.0, jitter - 0.38);
+
+      densityTarget[index] = clamp01(density * 0.995 + smokeBloom * 0.075);
+      temperatureTarget[index] = clamp01(temperature * 0.988);
+      fuelTarget[index] = clamp01(fuel * 0.992);
+      turbulenceTarget[index] = clamp01(turbulence * 0.982 + smokeBloom * 0.18);
     }
   `
 }

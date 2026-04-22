@@ -58,7 +58,23 @@ export function createVolumeRaymarchPass(
     fragment: {
       module: shaderModule,
       entryPoint: 'fsMain',
-      targets: [{ format }],
+      targets: [
+        {
+          format,
+          blend: {
+            color: {
+              srcFactor: 'one',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
+            alpha: {
+              srcFactor: 'one',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
+          },
+        },
+      ],
     },
     primitive: {
       topology: 'triangle-list',
@@ -150,7 +166,7 @@ export function createVolumeRaymarchPass(
         colorAttachments: [
           {
             view,
-            clearValue: { r: 0.07, g: 0.05, b: 0.045, a: 1 },
+            clearValue: { r: 0, g: 0, b: 0, a: 0 },
             loadOp: 'clear',
             storeOp: 'store',
           },
@@ -476,7 +492,9 @@ function createVolumeRaymarchShader() {
         discard;
       }
 
-      return vec4<f32>(pow(accumulatedColor, vec3<f32>(0.92)), accumulatedAlpha);
+      let finalColor = pow(accumulatedColor, vec3<f32>(0.92));
+
+      return vec4<f32>(finalColor * accumulatedAlpha, accumulatedAlpha);
     }
   `
 }

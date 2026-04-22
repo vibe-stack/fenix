@@ -44,7 +44,7 @@ export async function createRawWebGPUContext(
   context.configure({
     device,
     format,
-    alphaMode: 'opaque',
+    alphaMode: 'premultiplied',
   })
 
   return {
