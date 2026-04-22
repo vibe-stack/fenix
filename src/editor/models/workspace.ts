@@ -1,4 +1,5 @@
 import type { GraphNodeDefinition } from '../../engine/graph/schema/nodeTypes'
+import type { VolumeDisplayMode } from '../../engine/render/volumetrics/volumeDisplayMode'
 import type { SimulationDefaults } from '../../engine/simulation/config/simulationDefaults'
 
 export interface AppState {
@@ -14,7 +15,7 @@ export interface ProjectState {
   savedRevision: string
 }
 
-export type ViewportShadingMode = 'temperature' | 'density' | 'velocity'
+export type ViewportShadingMode = VolumeDisplayMode
 export type SimulationProfile =
   | 'Combustion Authoring Baseline'
   | 'Sparse Smoke Blocking'

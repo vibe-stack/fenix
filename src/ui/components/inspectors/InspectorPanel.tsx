@@ -14,122 +14,114 @@ export function InspectorPanel() {
   const projectState = useEditorStore((snapshot) => snapshot.projectState)
   const simulationState = useEditorStore((snapshot) => snapshot.simulationState)
   const viewportState = useEditorStore((snapshot) => snapshot.viewportState)
-  const selectedNode = graphState.nodeCatalog.find(
-    (node) => node.id === graphState.selectedNodeId,
-  )
+  const selectedNode = graphState.nodeCatalog.find((node) => node.id === graphState.selectedNodeId)
 
   return (
-    <div className="flex flex-col gap-4">
-      <Panel
-        title="Inspector"
-        subtitle="Project, graph, and viewport details are surfaced from the editor store instead of being tucked into component-local state."
-        status="baseline"
-      >
-        <DefinitionList
-          rows={[
-            ['Author', projectState.author],
-            ['Revision', projectState.savedRevision],
-            ['Units', projectState.units],
-            ['Viewport', viewportState.activeCamera],
-            ['Selected Node', selectedNode?.label ?? 'None'],
-            ['Overlays', viewportState.overlays.join(', ')],
-          ]}
-        />
+    <div>
+      {/* Project properties */}
+      <Panel title="Properties">
+        <dl>
+          {(
+            [
+              ['Author', projectState.author],
+              ['Revision', projectState.savedRevision],
+              ['Units', projectState.units],
+              ['Camera', viewportState.activeCamera],
+              ['Node', selectedNode?.label ?? 'None'],
+            ] as Array<[string, string]>
+          ).map(([label, value]) => (
+            <div
+              key={label}
+              className="flex items-center justify-between px-3 py-2 odd:bg-(--fenix-row-alt)"
+            >
+              <dt className="text-[9px] uppercase tracking-[0.22em] text-(--fenix-text-muted)">
+                {label}
+              </dt>
+              <dd className="text-xs text-(--fenix-text)">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </Panel>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+      {/* Overlay toggles */}
+      <Panel title="Overlays">
+        <div className="flex flex-col gap-px">
           {['bounds', 'guides', 'stats'].map((overlay) => {
             const isActive = viewportState.overlays.includes(overlay)
-
             return (
               <button
                 key={overlay}
                 type="button"
-                onClick={() => {
-                  dispatch({
-                    type: 'viewport/toggle-overlay',
-                    overlay,
-                  })
-                }}
-                className={`rounded-full border px-3 py-2 text-xs uppercase tracking-[0.2em] transition ${
-                  isActive
-                    ? 'border-[var(--fenix-border-strong)] bg-[rgba(255,122,61,0.14)] text-[var(--fenix-accent-soft)]'
-                    : 'border-white/8 bg-black/12 text-[var(--fenix-text-muted)]'
+                onClick={() => dispatch({ type: 'viewport/toggle-overlay', overlay })}
+                className={`flex items-center justify-between px-3 py-2.5 text-left transition-colors ${
+                  isActive ? 'bg-(--fenix-active)' : 'hover:bg-(--fenix-row)'
                 }`}
               >
-                {overlay}
+                <span
+                  className={`text-xs uppercase tracking-[0.2em] ${
+                    isActive ? 'text-(--fenix-accent-soft)' : 'text-(--fenix-text-muted)'
+                  }`}
+                >
+                  {overlay}
+                </span>
+                <span
+                  className={`h-1 w-1 ${isActive ? 'bg-(--fenix-accent)' : 'bg-transparent'}`}
+                />
               </button>
             )
           })}
         </div>
       </Panel>
 
-      <Panel
-        title="Simulation Config"
-        subtitle="Simulation presets are now command-driven so the editor shell starts behaving like a real tool."
-        status={`${simulationState.stepRateHz} hz`}
-      >
-        <DefinitionList
-          rows={[
-            ['Profile', simulationState.profile],
-            ['Solver', simulationState.solver],
-            ['Domain', simulationState.domainResolution.join(' x ')],
-            ['Brick Size', `${simulationState.sparseBrickSize} voxels`],
-            ['Buoyancy', simulationState.temperatureBuoyancy.toFixed(2)],
-            ['Caching', simulationState.cacheStrategy],
-          ]}
-        />
+      {/* Simulation config */}
+      <Panel title="Simulation">
+        <dl>
+          {(
+            [
+              ['Profile', simulationState.profile],
+              ['Solver', simulationState.solver],
+              ['Domain', simulationState.domainResolution.join(' × ')],
+              ['Brick', `${simulationState.sparseBrickSize} vox`],
+              ['Buoyancy', simulationState.temperatureBuoyancy.toFixed(2)],
+              ['Cache', simulationState.cacheStrategy],
+              ['Rate', `${simulationState.stepRateHz} Hz`],
+            ] as Array<[string, string]>
+          ).map(([label, value]) => (
+            <div
+              key={label}
+              className="flex items-center justify-between px-3 py-2 odd:bg-(--fenix-row-alt)"
+            >
+              <dt className="text-[9px] uppercase tracking-[0.22em] text-(--fenix-text-muted)">
+                {label}
+              </dt>
+              <dd className="text-xs text-(--fenix-text)">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </Panel>
 
-        <div className="mt-4 grid gap-2">
+      {/* Sim profile selection */}
+      <Panel title="Sim Profile">
+        <div className="flex flex-col gap-px">
           {simulationProfiles.map((profile) => {
             const isActive = profile === simulationState.profile
-
             return (
               <button
                 key={profile}
                 type="button"
-                onClick={() => {
-                  dispatch({
-                    type: 'simulation/set-profile',
-                    profile,
-                  })
-                }}
-                className={`rounded-[18px] border px-4 py-3 text-left transition ${
+                onClick={() => dispatch({ type: 'simulation/set-profile', profile })}
+                className={`px-3 py-2.5 text-left text-xs transition-colors ${
                   isActive
-                    ? 'border-[var(--fenix-border-strong)] bg-[rgba(255,122,61,0.12)]'
-                    : 'border-white/6 bg-black/12 hover:border-[var(--fenix-border)]'
+                    ? 'bg-(--fenix-active) text-(--fenix-accent-soft)'
+                    : 'text-(--fenix-text-muted) hover:bg-(--fenix-row) hover:text-(--fenix-text)'
                 }`}
               >
-                <p className="text-sm font-medium text-[var(--fenix-text)]">{profile}</p>
-                <p className="mt-1 text-xs leading-5 text-[var(--fenix-text-muted)]">
-                  {isActive ? 'Current simulation authoring profile.' : 'Switch simulation preset.'}
-                </p>
+                {profile}
               </button>
             )
           })}
         </div>
       </Panel>
     </div>
-  )
-}
-
-interface DefinitionListProps {
-  rows: Array<[string, string]>
-}
-
-function DefinitionList({ rows }: DefinitionListProps) {
-  return (
-    <dl className="space-y-3">
-      {rows.map(([label, value]) => (
-        <div
-          key={label}
-          className="flex items-start justify-between gap-3 rounded-[18px] border border-white/6 bg-black/12 px-4 py-3"
-        >
-          <dt className="text-xs uppercase tracking-[0.22em] text-[var(--fenix-text-muted)]">
-            {label}
-          </dt>
-          <dd className="text-right text-sm font-medium text-[var(--fenix-text)]">{value}</dd>
-        </div>
-      ))}
-    </dl>
   )
 }

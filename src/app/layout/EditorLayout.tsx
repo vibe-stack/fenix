@@ -14,22 +14,27 @@ interface EditorLayoutProps {
 
 export function EditorLayout({ rendererBridge, diagnostics }: EditorLayoutProps) {
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[1680px] flex-col gap-4 px-4 py-4 md:px-6 md:py-6">
+    <div className="flex h-screen flex-col overflow-hidden bg-(--fenix-bg)">
       <TopToolbar diagnostics={diagnostics} />
 
-      <section className="grid flex-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_360px]">
-        <div className="flex flex-col gap-4">
+      <div className="flex flex-1 gap-px overflow-hidden bg-(--fenix-bg)">
+        {/* Left sidebar */}
+        <div className="flex w-52 shrink-0 flex-col overflow-y-auto bg-(--fenix-panel)">
           <WorkspacePanel />
           <NodeGraphPreview />
         </div>
 
-        <div className="flex min-h-[620px] flex-col gap-4">
+        {/* Center — viewport + controls */}
+        <div className="flex flex-1 flex-col gap-px overflow-hidden">
           <ViewportCanvasCard diagnostics={diagnostics} rendererBridge={rendererBridge} />
           <TimelinePanel />
         </div>
 
-        <InspectorPanel />
-      </section>
-    </main>
+        {/* Right inspector */}
+        <div className="w-60 shrink-0 overflow-y-auto bg-(--fenix-panel)">
+          <InspectorPanel />
+        </div>
+      </div>
+    </div>
   )
 }

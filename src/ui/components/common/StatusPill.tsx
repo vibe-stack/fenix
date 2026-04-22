@@ -4,9 +4,9 @@ interface StatusPillProps {
 }
 
 const toneClassMap: Record<NonNullable<StatusPillProps['tone']>, string> = {
-  default: 'border-[var(--fenix-border)] bg-white/5 text-[var(--fenix-text-muted)]',
-  success: 'border-emerald-400/30 bg-emerald-300/10 text-[var(--fenix-success)]',
-  warning: 'border-amber-300/30 bg-amber-200/10 text-[var(--fenix-warning)]',
+  default: 'border-[var(--fenix-border)] bg-white/5 text-(--fenix-text-muted)',
+  success: 'border-emerald-400/30 bg-emerald-300/10 text-(--fenix-success)',
+  warning: 'border-amber-300/30 bg-amber-200/10 text-(--fenix-warning)',
 }
 
 export function StatusPill({ label, tone = 'default' }: StatusPillProps) {

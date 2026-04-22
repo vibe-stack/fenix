@@ -2,20 +2,21 @@
 
 :root {
   color-scheme: dark;
-  background-color: #120d0b;
   font-family: "Avenir Next", "IBM Plex Sans", "Segoe UI", sans-serif;
-  --fenix-bg: #120d0b;
-  --fenix-bg-soft: #1b1411;
-  --fenix-panel: rgba(33, 25, 21, 0.82);
-  --fenix-panel-strong: rgba(47, 35, 29, 0.95);
-  --fenix-border: rgba(255, 171, 103, 0.18);
-  --fenix-border-strong: rgba(255, 171, 103, 0.34);
-  --fenix-text: #f6eee7;
-  --fenix-text-muted: #b9a898;
+  --fenix-bg: #070605;
+  --fenix-topbar: #0d0a09;
+  --fenix-panel: #111010;
+  --fenix-section-head: #181414;
+  --fenix-row: #1c1918;
+  --fenix-row-alt: #181414;
+  --fenix-active: rgba(255, 122, 61, 0.14);
+  --fenix-text: #e2d8d2;
+  --fenix-text-muted: #5e5250;
+  --fenix-text-dim: #352e2c;
   --fenix-accent: #ff7a3d;
   --fenix-accent-soft: #ffc489;
-  --fenix-success: #8fda9c;
-  --fenix-warning: #f0b35d;
+  --fenix-success: #5dba6e;
+  --fenix-warning: #e0a040;
 }
 
 * {
@@ -25,30 +26,14 @@
 html,
 body,
 #root {
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
   color: var(--fenix-text);
-  background:
-    radial-gradient(circle at top left, rgba(255, 122, 61, 0.2), transparent 28%),
-    radial-gradient(circle at top right, rgba(255, 196, 137, 0.14), transparent 24%),
-    linear-gradient(180deg, #1a120e 0%, #120d0b 42%, #0d0908 100%);
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.6), transparent 92%);
-  opacity: 0.3;
+  background: var(--fenix-bg);
 }
 
 a {
@@ -67,15 +52,14 @@ textarea {
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 196, 137, 0.22);
-  border-radius: 999px;
+  background: #2a2320;
 }
