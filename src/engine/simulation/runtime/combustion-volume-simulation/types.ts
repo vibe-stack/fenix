@@ -1,11 +1,24 @@
 import type { CombustionVolumeRenderBuffers } from '../../common/combustionVolumeRenderBuffers'
 import type { VolumeResolution } from '../../common/volumeResolution'
 
+export type ScalarAdvectionMode = 'semi-lagrangian' | 'maccormack'
+
 export interface CombustionVolumeSimulation {
   readonly resolution: VolumeResolution
   step(encoder: GPUCommandEncoder, elapsedSeconds: number, stepSeconds: number): void
   getRenderBuffers(): CombustionVolumeRenderBuffers
+  getDebugBuffers(): SimulationDebugBuffers
+  getScalarAdvectionMode(): ScalarAdvectionMode
+  setScalarAdvectionMode(mode: ScalarAdvectionMode): void
   dispose(): void
+}
+
+export interface SimulationDebugBuffers extends CombustionVolumeRenderBuffers {
+  velocityMagnitude: GPUBuffer
+  divergence: GPUBuffer
+  pressure: GPUBuffer
+  vorticityMagnitude: GPUBuffer
+  confinementForceMagnitude: GPUBuffer
 }
 
 export interface ComputeResources {

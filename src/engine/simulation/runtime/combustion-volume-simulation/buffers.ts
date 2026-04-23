@@ -56,7 +56,7 @@ export function createScalarFieldBuffers(
     density: createStorageBuffer(device, `${label}-density`, voxelCount * 4),
     temperature: createStorageBuffer(device, `${label}-temperature`, voxelCount * 4),
     fuel: createStorageBuffer(device, `${label}-fuel`, voxelCount * 4),
-    turbulence: createStorageBuffer(device, `${label}-turbulence`, voxelCount * 4),
+    reaction: createStorageBuffer(device, `${label}-reaction`, voxelCount * 4),
   }
 }
 
@@ -64,5 +64,5 @@ export function destroyScalarFieldBuffers(buffers: ScalarFieldBuffers) {
   buffers.density.destroy()
   buffers.temperature.destroy()
   buffers.fuel.destroy()
-  buffers.turbulence.destroy()
+  buffers.reaction.destroy()
 }

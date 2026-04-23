@@ -5,5 +5,5 @@ export interface CombustionVolumeRenderFrame {
   density: Float32Array
   temperature: Float32Array
   fuel: Float32Array
-  turbulence: Float32Array
+  reaction: Float32Array
 }

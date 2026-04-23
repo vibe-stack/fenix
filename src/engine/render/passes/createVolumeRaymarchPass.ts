@@ -108,7 +108,7 @@ export function createVolumeRaymarchPass(
         { binding: 2, resource: { buffer: buffers.density } },
         { binding: 3, resource: { buffer: buffers.temperature } },
         { binding: 4, resource: { buffer: buffers.fuel } },
-        { binding: 5, resource: { buffer: buffers.turbulence } },
+        { binding: 5, resource: { buffer: buffers.reaction } },
       ],
     })
 
@@ -225,7 +225,7 @@ function createVolumeRaymarchShader() {
     @group(0) @binding(2) var<storage, read> densityField: array<f32>;
     @group(0) @binding(3) var<storage, read> temperatureField: array<f32>;
     @group(0) @binding(4) var<storage, read> fuelField: array<f32>;
-    @group(0) @binding(5) var<storage, read> turbulenceField: array<f32>;
+    @group(0) @binding(5) var<storage, read> reactionField: array<f32>;
 
     fn flatten(coord: vec3<u32>) -> u32 {
       return coord.x + u32(resolution.width) * (coord.y + u32(resolution.height) * coord.z);
@@ -273,7 +273,7 @@ function createVolumeRaymarchShader() {
       return fuelField[flatten(clamped)];
     }
 
-    fn readTurbulence(coord: vec3<u32>) -> f32 {
+    fn readReaction(coord: vec3<u32>) -> f32 {
       let maxCoord = vec3<u32>(
         u32(resolution.width) - 1u,
         u32(resolution.height) - 1u,
@@ -284,7 +284,7 @@ function createVolumeRaymarchShader() {
         clamp(coord.y, 0u, maxCoord.y),
         clamp(coord.z, 0u, maxCoord.z),
       );
-      return turbulenceField[flatten(clamped)];
+      return reactionField[flatten(clamped)];
     }
 
     fn sampleDensity(position: vec3<f32>) -> f32 {
@@ -358,20 +358,20 @@ function createVolumeRaymarchShader() {
       return mix(mix(x00, x10, fraction.y), mix(x01, x11, fraction.y), fraction.z);
     }
 
-    fn sampleTurbulence(position: vec3<f32>) -> f32 {
+    fn sampleReaction(position: vec3<f32>) -> f32 {
       let dimensions = vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0);
       let clamped = clamp(position, vec3<f32>(0.0), dimensions);
       let base = vec3<u32>(floor(clamped));
       let upper = min(base + vec3<u32>(1u), vec3<u32>(dimensions));
       let fraction = fract(clamped);
-      let c000 = readTurbulence(base);
-      let c100 = readTurbulence(vec3<u32>(upper.x, base.y, base.z));
-      let c010 = readTurbulence(vec3<u32>(base.x, upper.y, base.z));
-      let c110 = readTurbulence(vec3<u32>(upper.x, upper.y, base.z));
-      let c001 = readTurbulence(vec3<u32>(base.x, base.y, upper.z));
-      let c101 = readTurbulence(vec3<u32>(upper.x, base.y, upper.z));
-      let c011 = readTurbulence(vec3<u32>(base.x, upper.y, upper.z));
-      let c111 = readTurbulence(upper);
+      let c000 = readReaction(base);
+      let c100 = readReaction(vec3<u32>(upper.x, base.y, base.z));
+      let c010 = readReaction(vec3<u32>(base.x, upper.y, base.z));
+      let c110 = readReaction(vec3<u32>(upper.x, upper.y, base.z));
+      let c001 = readReaction(vec3<u32>(base.x, base.y, upper.z));
+      let c101 = readReaction(vec3<u32>(upper.x, base.y, upper.z));
+      let c011 = readReaction(vec3<u32>(base.x, upper.y, upper.z));
+      let c111 = readReaction(upper);
       let x00 = mix(c000, c100, fraction.x);
       let x10 = mix(c010, c110, fraction.x);
       let x01 = mix(c001, c101, fraction.x);
@@ -468,7 +468,7 @@ function createVolumeRaymarchShader() {
           if (density > 0.001) {
             let temperature = sampleTemperature(samplePosition);
             let fuel = sampleFuel(samplePosition);
-            let turbulence = sampleTurbulence(samplePosition);
+            let reaction = sampleReaction(samplePosition);
             let densityGrad = densityGradient(samplePosition);
             let gradLength = max(length(densityGrad), 0.0001);
             let smokeNormal = -densityGrad / gradLength;
@@ -481,17 +481,17 @@ function createVolumeRaymarchShader() {
             let forwardScatter = pow(clamp(dot(-rayDirection, lightDirection), 0.0, 1.0), 1.2) * 0.48 + 0.46;
             let smokeBase = smokePalette(density, temperature);
             let ambientLight = vec3<f32>(0.62, 0.67, 0.74) * (0.34 + heightAmbient * 0.38);
-            let coolRim = vec3<f32>(0.38, 0.46, 0.56) * rimLight * (0.18 + turbulence * 0.18);
+            let coolRim = vec3<f32>(0.38, 0.46, 0.56) * rimLight * (0.18 + reaction * 0.18);
             let warmRim = vec3<f32>(1.0, 0.54, 0.2) * rimLight * (0.05 + temperature * 0.16);
             let smokeColor = smokeBase * (0.56 + lightTransmission * 0.28 + diffuseLight * 0.34) + ambientLight * density * 0.72 + coolRim + warmRim * 0.35;
             let fireColor = firePalette(temperature);
-            let emissive = fireColor * (temperature * (fuel * 1.65 + 0.92)) * (turbulence * 0.32 + 0.72);
-            let flameMix = clamp(temperature * 0.95 + fuel * 0.12 + turbulence * 0.04, 0.0, 0.52);
+            let emissive = fireColor * (temperature * (fuel * 1.65 + 0.92)) * (reaction * 0.32 + 0.72);
+            let flameMix = clamp(temperature * 0.95 + fuel * 0.12 + reaction * 0.04, 0.0, 0.52);
             let fireAlpha = 1.0 - exp(-temperature * (fuel + 0.06) * delta * 2.6);
             var compositeColor = mix(smokeColor, emissive, flameMix);
             // Taper opacity near the top so smoke exits gracefully rather than hitting a wall
             let topFade = 1.0 - smoothstep(0.72, 0.98, uvw.y);
-            var opacity = (1.0 - exp(-density * delta * (1.1 + turbulence * 0.22) * 4.4)) * topFade;
+            var opacity = (1.0 - exp(-density * delta * (1.1 + reaction * 0.22) * 4.4)) * topFade;
 
             compositeColor += emissive * (forwardScatter * 0.22 + rimLight * 0.04);
             opacity = max(opacity, fireAlpha * 0.12 * topFade);
