@@ -9,11 +9,11 @@ export interface SimulationDefaults {
 }
 
 export const simulationDefaults: SimulationDefaults = {
-  domainResolution: [128, 256, 128],
-  sparseBrickSize: 8,
+  domainResolution: [90, 164, 90],
+  sparseBrickSize: 1,
   solver: 'mac-cormack',
-  stepRateHz: 60,
-  temperatureBuoyancy: 0.48,
+  stepRateHz: 120,
+  temperatureBuoyancy: 0.98,
   combustionEnabled: true,
   cacheStrategy: 'deferred sparse pages',
 }

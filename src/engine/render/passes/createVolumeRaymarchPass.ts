@@ -19,6 +19,7 @@ export interface VolumeRaymarchPass {
 
 const GPU_BUFFER_UNIFORM = 0x0040
 const GPU_BUFFER_COPY_DST = 0x0008
+const CAMERA_DATA_FLOATS = 36
 
 export function createVolumeRaymarchPass(
   device: GPUDevice,
@@ -34,10 +35,10 @@ export function createVolumeRaymarchPass(
   }
   const volumeCenterY = volumeHalfExtents.y - 0.25
   const voxelCount = resolution.width * resolution.height * resolution.depth
-  const stepCount = voxelCount >= 4_000_000 ? 88 : voxelCount >= 1_800_000 ? 112 : 144
+  const stepCount = voxelCount >= 4_000_000 ? 450 : voxelCount >= 1_800_000 ? 400 : 260
   const cameraBuffer = device.createBuffer({
     label: 'volume-camera-buffer',
-    size: 16 * 9,
+    size: Float32Array.BYTES_PER_ELEMENT * CAMERA_DATA_FLOATS,
     usage: GPU_BUFFER_UNIFORM | GPU_BUFFER_COPY_DST,
   })
   const resolutionBuffer = device.createBuffer({
@@ -53,6 +54,8 @@ export function createVolumeRaymarchPass(
   ])
 
   device.queue.writeBuffer(resolutionBuffer, 0, resolutionData)
+
+  const cameraData = new Float32Array(CAMERA_DATA_FLOATS)
 
   const shaderModule = device.createShaderModule({
     label: 'raw-volume-raymarch-shader',
@@ -136,44 +139,42 @@ export function createVolumeRaymarchPass(
       elapsedSeconds,
     ) {
       const displayModeValue = displayMode === 'density' ? 1 : displayMode === 'fuel' ? 2 : 0
-      const cameraData = new Float32Array([
-        camera.position.x,
-        camera.position.y,
-        camera.position.z,
-        0,
-        camera.right.x,
-        camera.right.y,
-        camera.right.z,
-        0,
-        camera.up.x,
-        camera.up.y,
-        camera.up.z,
-        0,
-        camera.forward.x,
-        camera.forward.y,
-        camera.forward.z,
-        0,
-        0,
-        volumeCenterY,
-        0,
-        0,
-        volumeHalfExtents.x,
-        volumeHalfExtents.y,
-        volumeHalfExtents.z,
-        0,
-        renderWidth,
-        renderHeight,
-        camera.aspect,
-        camera.tanHalfFovY,
-        displayModeValue,
-        stepCount,
-        elapsedSeconds,
-        0,
-        camera.target.x,
-        camera.target.y,
-        camera.target.z,
-        0,
-      ])
+      cameraData[0] = camera.position.x
+      cameraData[1] = camera.position.y
+      cameraData[2] = camera.position.z
+      cameraData[3] = 0
+      cameraData[4] = camera.right.x
+      cameraData[5] = camera.right.y
+      cameraData[6] = camera.right.z
+      cameraData[7] = 0
+      cameraData[8] = camera.up.x
+      cameraData[9] = camera.up.y
+      cameraData[10] = camera.up.z
+      cameraData[11] = 0
+      cameraData[12] = camera.forward.x
+      cameraData[13] = camera.forward.y
+      cameraData[14] = camera.forward.z
+      cameraData[15] = 0
+      cameraData[16] = 0
+      cameraData[17] = volumeCenterY
+      cameraData[18] = 0
+      cameraData[19] = 0
+      cameraData[20] = volumeHalfExtents.x
+      cameraData[21] = volumeHalfExtents.y
+      cameraData[22] = volumeHalfExtents.z
+      cameraData[23] = 0
+      cameraData[24] = renderWidth
+      cameraData[25] = renderHeight
+      cameraData[26] = camera.aspect
+      cameraData[27] = camera.tanHalfFovY
+      cameraData[28] = displayModeValue
+      cameraData[29] = stepCount
+      cameraData[30] = elapsedSeconds
+      cameraData[31] = 0
+      cameraData[32] = camera.target.x
+      cameraData[33] = camera.target.y
+      cameraData[34] = camera.target.z
+      cameraData[35] = 0
 
       device.queue.writeBuffer(cameraBuffer, 0, cameraData)
 
@@ -241,81 +242,84 @@ function createVolumeRaymarchShader() {
     @group(0) @binding(6) var<storage, read> activeBrickFlags: array<u32>;
     @group(0) @binding(7) var<uniform> brickInfo: BrickInfo;
 
+    fn maxCoordU() -> vec3<u32> {
+      return vec3<u32>(
+        u32(resolution.width) - 1u,
+        u32(resolution.height) - 1u,
+        u32(resolution.depth) - 1u,
+      );
+    }
+
+    fn sampleBounds() -> vec3<f32> {
+      return vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0);
+    }
+
+    fn clampCoord(coord: vec3<u32>) -> vec3<u32> {
+      let maxCoord = maxCoordU();
+      return vec3<u32>(
+        clamp(coord.x, 0u, maxCoord.x),
+        clamp(coord.y, 0u, maxCoord.y),
+        clamp(coord.z, 0u, maxCoord.z),
+      );
+    }
+
+    fn brickSizeU() -> u32 {
+      return max(brickInfo.params.x, 1u);
+    }
+
+    fn brickSizeF() -> f32 {
+      return f32(brickSizeU());
+    }
+
+    fn activeBrickIndexForCoord(coord: vec3<u32>) -> u32 {
+      let brickCoord = min(coord / vec3<u32>(brickSizeU()), brickInfo.counts.xyz - vec3<u32>(1u));
+      return brickCoord.x + brickInfo.counts.x * (brickCoord.y + brickInfo.counts.y * brickCoord.z);
+    }
+
     fn flatten(coord: vec3<u32>) -> u32 {
       return coord.x + u32(resolution.width) * (coord.y + u32(resolution.height) * coord.z);
     }
 
     fn readDensity(coord: vec3<u32>) -> f32 {
-      let maxCoord = vec3<u32>(
-        u32(resolution.width) - 1u,
-        u32(resolution.height) - 1u,
-        u32(resolution.depth) - 1u,
-      );
-      let clamped = vec3<u32>(
-        clamp(coord.x, 0u, maxCoord.x),
-        clamp(coord.y, 0u, maxCoord.y),
-        clamp(coord.z, 0u, maxCoord.z),
-      );
-      return densityField[flatten(clamped)];
+      return densityField[flatten(clampCoord(coord))];
     }
 
     fn readTemperature(coord: vec3<u32>) -> f32 {
-      let maxCoord = vec3<u32>(
-        u32(resolution.width) - 1u,
-        u32(resolution.height) - 1u,
-        u32(resolution.depth) - 1u,
-      );
-      let clamped = vec3<u32>(
-        clamp(coord.x, 0u, maxCoord.x),
-        clamp(coord.y, 0u, maxCoord.y),
-        clamp(coord.z, 0u, maxCoord.z),
-      );
-      return temperatureField[flatten(clamped)];
+      return temperatureField[flatten(clampCoord(coord))];
     }
 
     fn readFuel(coord: vec3<u32>) -> f32 {
-      let maxCoord = vec3<u32>(
-        u32(resolution.width) - 1u,
-        u32(resolution.height) - 1u,
-        u32(resolution.depth) - 1u,
-      );
-      let clamped = vec3<u32>(
-        clamp(coord.x, 0u, maxCoord.x),
-        clamp(coord.y, 0u, maxCoord.y),
-        clamp(coord.z, 0u, maxCoord.z),
-      );
-      return fuelField[flatten(clamped)];
+      return fuelField[flatten(clampCoord(coord))];
     }
 
     fn readReaction(coord: vec3<u32>) -> f32 {
-      let maxCoord = vec3<u32>(
-        u32(resolution.width) - 1u,
-        u32(resolution.height) - 1u,
-        u32(resolution.depth) - 1u,
-      );
-      let clamped = vec3<u32>(
-        clamp(coord.x, 0u, maxCoord.x),
-        clamp(coord.y, 0u, maxCoord.y),
-        clamp(coord.z, 0u, maxCoord.z),
-      );
-      return reactionField[flatten(clamped)];
+      return reactionField[flatten(clampCoord(coord))];
     }
 
     fn isActiveSample(position: vec3<f32>) -> bool {
-      let maxCoord = vec3<u32>(
-        u32(resolution.width) - 1u,
-        u32(resolution.height) - 1u,
-        u32(resolution.depth) - 1u,
+      let coord = vec3<u32>(floor(clamp(position, vec3<f32>(0.0), sampleBounds())));
+      return activeBrickFlags[activeBrickIndexForCoord(coord)] != 0u;
+    }
+
+    fn distanceToNextBrickBoundary(position: vec3<f32>, direction: vec3<f32>) -> f32 {
+      let epsilon = 0.001;
+      let far = 1e9;
+      let brickExtent = brickSizeF();
+      let probe = clamp(position + sign(direction) * epsilon, vec3<f32>(0.0), sampleBounds());
+      let brickCoord = floor(probe / brickExtent);
+      let boundary = vec3<f32>(
+        select(brickCoord.x * brickExtent, (brickCoord.x + 1.0) * brickExtent, direction.x > 0.0),
+        select(brickCoord.y * brickExtent, (brickCoord.y + 1.0) * brickExtent, direction.y > 0.0),
+        select(brickCoord.z * brickExtent, (brickCoord.z + 1.0) * brickExtent, direction.z > 0.0),
       );
-      let coord = vec3<u32>(floor(clamp(position, vec3<f32>(0.0), vec3<f32>(maxCoord))));
-      let brickSize = max(brickInfo.params.x, 1u);
-      let brickCoord = min(coord / vec3<u32>(brickSize), brickInfo.counts.xyz - vec3<u32>(1u));
-      let brickIndex = brickCoord.x + brickInfo.counts.x * (brickCoord.y + brickInfo.counts.y * brickCoord.z);
-      return activeBrickFlags[brickIndex] != 0u;
+      let tx = select(far, (boundary.x - position.x) / direction.x, abs(direction.x) > 0.00001);
+      let ty = select(far, (boundary.y - position.y) / direction.y, abs(direction.y) > 0.00001);
+      let tz = select(far, (boundary.z - position.z) / direction.z, abs(direction.z) > 0.00001);
+      return max(min(tx, min(ty, tz)) + epsilon, epsilon);
     }
 
     fn sampleDensity(position: vec3<f32>) -> f32 {
-      let dimensions = vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0);
+      let dimensions = sampleBounds();
       let clamped = clamp(position, vec3<f32>(0.0), dimensions);
       let base = vec3<u32>(floor(clamped));
       let upper = min(base + vec3<u32>(1u), vec3<u32>(dimensions));
@@ -348,11 +352,7 @@ function createVolumeRaymarchShader() {
     }
 
     fn densityGradient(position: vec3<f32>) -> vec3<f32> {
-      let maxCoord = vec3<u32>(
-        u32(resolution.width) - 1u,
-        u32(resolution.height) - 1u,
-        u32(resolution.depth) - 1u,
-      );
+      let maxCoord = maxCoordU();
       let coord = vec3<u32>(round(clamp(position, vec3<f32>(0.0), vec3<f32>(maxCoord))));
       let dx = readDensity(vec3<u32>(incU(coord.x, maxCoord.x), coord.y, coord.z)) -
         readDensity(vec3<u32>(decU(coord.x), coord.y, coord.z));
@@ -364,7 +364,7 @@ function createVolumeRaymarchShader() {
     }
 
     fn sampleTemperature(position: vec3<f32>) -> f32 {
-      let dimensions = vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0);
+      let dimensions = sampleBounds();
       let clamped = clamp(position, vec3<f32>(0.0), dimensions);
       let base = vec3<u32>(floor(clamped));
       let upper = min(base + vec3<u32>(1u), vec3<u32>(dimensions));
@@ -385,7 +385,7 @@ function createVolumeRaymarchShader() {
     }
 
     fn sampleFuel(position: vec3<f32>) -> f32 {
-      let dimensions = vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0);
+      let dimensions = sampleBounds();
       let clamped = clamp(position, vec3<f32>(0.0), dimensions);
       let base = vec3<u32>(floor(clamped));
       let upper = min(base + vec3<u32>(1u), vec3<u32>(dimensions));
@@ -406,7 +406,7 @@ function createVolumeRaymarchShader() {
     }
 
     fn sampleReaction(position: vec3<f32>) -> f32 {
-      let dimensions = vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0);
+      let dimensions = sampleBounds();
       let clamped = clamp(position, vec3<f32>(0.0), dimensions);
       let base = vec3<u32>(floor(clamped));
       let upper = min(base + vec3<u32>(1u), vec3<u32>(dimensions));
@@ -449,12 +449,12 @@ function createVolumeRaymarchShader() {
     }
 
     fn smokePalette(density: f32, temperature: f32, lightAmount: f32) -> vec3<f32> {
-      let warmTint = clamp(temperature * 0.55, 0.0, 1.0);
-      let cloudBrightness = clamp(lightAmount * 0.8 + density * 0.18, 0.0, 1.0);
+      let warmTint = clamp(temperature * 0.5, 0.0, 1.0);
+      let cloudBrightness = clamp(lightAmount * 0.55 + density * 0.12, 0.0, 1.0);
       return mix(
-        vec3<f32>(0.22, 0.225, 0.235),
-        vec3<f32>(0.78, 0.76, 0.72) + warmTint * vec3<f32>(0.28, 0.12, 0.04),
-        clamp(cloudBrightness + temperature * 0.18, 0.0, 1.0),
+        vec3<f32>(0.018, 0.02, 0.024),
+        vec3<f32>(0.16, 0.17, 0.18) + warmTint * vec3<f32>(0.16, 0.065, 0.02),
+        clamp(cloudBrightness + temperature * 0.12, 0.0, 1.0),
       );
     }
 
@@ -520,21 +520,26 @@ function createVolumeRaymarchShader() {
       let stepCount = u32(camera.renderMode.y);
       let delta = rayLength / max(f32(stepCount), 1.0);
       let invExtent = 1.0 / (camera.volumeHalfExtents.xyz * 2.0);
+      let sampleDimensions = sampleBounds();
+      let sampleRayDirection = rayDirection * invExtent * sampleDimensions;
       let lightDirection = normalize(vec3<f32>(-0.42, 0.78, 0.36));
       let fillDirection = normalize(vec3<f32>(0.55, 0.32, -0.62));
+      let forwardScatter = pow(clamp(dot(-rayDirection, lightDirection), 0.0, 1.0), 1.05) * 0.62 + 0.52;
       var positionRay = camera.position.xyz + rayDirection * bounds.x;
+      var travelled = 0.0;
       var accumulatedColor = vec3<f32>(0.0);
       var accumulatedAlpha = 0.0;
 
-      for (var index = 0u; index < stepCount; index += 1u) {
+      for (var index = 0u; index < stepCount && travelled <= rayLength; index += 1u) {
         if (accumulatedAlpha > 0.985) {
           break;
         }
 
+        var stepDistance = delta;
         let uvw = (positionRay - boxMin) * invExtent;
 
         if (all(uvw >= vec3<f32>(0.0)) && all(uvw <= vec3<f32>(1.0))) {
-          let samplePosition = uvw * (vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0));
+          let samplePosition = uvw * sampleDimensions;
           if (isActiveSample(samplePosition)) {
             let density = max(sampleDensity(samplePosition) - 0.005, 0.0);
             let temperature = sampleTemperature(samplePosition);
@@ -546,9 +551,9 @@ function createVolumeRaymarchShader() {
               let microDetail = cloudMicroDetail(samplePosition, camera.renderMode.z);
               let thermalPattern = thermalPocketPattern(samplePosition, camera.renderMode.z);
               let hotPocket = smoothstep(0.48, 0.9, thermalPattern.x + reaction * 0.28 + hotGas * 0.2);
-              let coolingPocket = smoothstep(0.52, 0.92, 1.0 - thermalPattern.x + thermalPattern.z * 0.24) *
-                smoothstep(0.04, 0.7, density) *
-                (1.0 - smoothstep(0.5, 0.96, hotGas));
+              let coolingPocket = smoothstep(0.54, 0.9, 1.0 - thermalPattern.x + thermalPattern.z * 0.22) *
+                smoothstep(0.05, 0.74, density) *
+                (1.0 - smoothstep(0.48, 0.92, hotGas));
               let bodyPocket = smoothstep(0.22, 0.82, thermalPattern.y + microDetail * 0.32);
               let densityErosion = smoothstep(0.2, 0.78, microDetail + bodyPocket * 0.35 + reaction * 0.14 + hotGas * 0.08);
               let detailContrast = mix(0.46, 1.88, densityErosion) *
@@ -568,22 +573,29 @@ function createVolumeRaymarchShader() {
               let lightProbePosition = clamp(uvw + lightDirection * 0.03, vec3<f32>(0.0), vec3<f32>(1.0));
               var shadowProbe = 0.0;
               if (detailedDensity > 0.004) {
-                shadowProbe = sampleDensity(lightProbePosition * (vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0)));
+                shadowProbe = sampleDensity(lightProbePosition * sampleDimensions);
               }
               let lightTransmission = 1.0 - clamp(shadowProbe * 0.22, 0.0, 0.38);
-              let forwardScatter = pow(clamp(dot(-rayDirection, lightDirection), 0.0, 1.0), 1.05) * 0.62 + 0.52;
               let cloudDetail = clamp(gradLength * 7.5 + abs(microDetail - 0.5) * 2.4 + reaction * 0.26, 0.0, 1.0);
               let totalLight = lightTransmission * (keyDiffuse * 0.95 + fillDiffuse * 0.32) + rimLight * 0.42;
               let smokeBase = smokePalette(detailedDensity, temperature, totalLight);
-              let ambientLight = vec3<f32>(0.7, 0.75, 0.82) * (0.52 + heightAmbient * 0.34);
-              let silverLining = vec3<f32>(0.92, 0.96, 1.0) * rimLight * (0.34 + cloudDetail * 0.52 + bodyPocket * 0.18);
-              let warmRim = vec3<f32>(1.0, 0.55, 0.19) * rimLight * (0.08 + temperature * 0.24);
+              let coldSmokeFactor = clamp(coolingPocket * (1.0 - hotPocket * 0.42), 0.0, 1.0);
+              let hotSmokeFactor = clamp(hotPocket * 0.78 + hotGas * 0.34 - coldSmokeFactor * 0.28, 0.0, 1.0);
+              let ambientLight = vec3<f32>(0.26, 0.28, 0.31) * (0.22 + heightAmbient * 0.18);
+              let silverLining = vec3<f32>(0.66, 0.69, 0.74) * rimLight * (0.11 + cloudDetail * 0.2 + bodyPocket * 0.08);
+              let warmRim = vec3<f32>(1.0, 0.54, 0.18) * rimLight * (0.05 + temperature * 0.2);
               let creviceShade = 1.0 - cloudDetail * (1.0 - lightTransmission) * mix(0.34, 0.64, coolingPocket);
-              let ashColor = vec3<f32>(0.34, 0.35, 0.36) * (0.82 + totalLight * 0.24);
-              let warmSmoke = smokeBase + vec3<f32>(0.18, 0.07, 0.025) * hotPocket * hotGas;
-              let phaseSmoke = mix(warmSmoke, ashColor, coolingPocket * 0.72);
-              let smokeColor = phaseSmoke * (0.74 + totalLight * 0.55) * creviceShade +
-                ambientLight * detailedDensity * 0.45 + silverLining + warmRim * 0.42;
+              let sootColor = mix(
+                vec3<f32>(0.004, 0.004, 0.006),
+                vec3<f32>(0.048, 0.045, 0.042),
+                clamp(totalLight * 0.26 + temperature * 0.05, 0.0, 1.0),
+              );
+              let warmSmoke = smokeBase + vec3<f32>(0.24, 0.082, 0.024) * hotSmokeFactor;
+              let phaseSmoke = mix(warmSmoke, sootColor, coldSmokeFactor * 0.84);
+              let smokeColor = phaseSmoke * mix(0.48 + totalLight * 0.24, 0.68 + totalLight * 0.42, hotSmokeFactor) * creviceShade +
+                ambientLight * detailedDensity * mix(0.14, 0.1, coldSmokeFactor) +
+                silverLining * (0.5 + hotSmokeFactor * 0.28) +
+                warmRim * (0.22 + hotSmokeFactor * 0.22);
               let fireColor = firePalette(temperature);
               let heatIsland = smoothstep(0.04, 0.42, hotGas) * mix(0.45, 1.45, hotPocket);
               let crackMask = heatIsland *
@@ -597,8 +609,8 @@ function createVolumeRaymarchShader() {
               var compositeColor = mix(smokeColor, emissive, flameMix);
               let topFade = 1.0 - smoothstep(0.88, 0.995, uvw.y);
               let heatClearing = clamp(1.0 - crackMask * 0.82 - hotGas * hotPocket * 0.2, 0.12, 1.0);
-              var opacity = (1.0 - exp(-detailedDensity * delta * (1.28 + cloudDetail * 0.68) * 3.0)) *
-                topFade * heatClearing;
+              var opacity = (1.0 - exp(-detailedDensity * delta * (1.08 + cloudDetail * 0.56) * mix(2.7, 4.1, coldSmokeFactor))) *
+                topFade * heatClearing * mix(0.92, 1.1, coldSmokeFactor);
 
               compositeColor += emissive * (forwardScatter * 0.62 + rimLight * 0.14);
               opacity = max(opacity, fireAlpha * 0.52 * topFade);
@@ -628,10 +640,13 @@ function createVolumeRaymarchShader() {
               accumulatedColor += (1.0 - accumulatedAlpha) * compositeColor * opacity;
               accumulatedAlpha += (1.0 - accumulatedAlpha) * opacity;
             }
+          } else {
+            stepDistance = max(distanceToNextBrickBoundary(samplePosition, sampleRayDirection), delta);
           }
         }
 
-        positionRay += rayDirection * delta;
+        positionRay += rayDirection * stepDistance;
+        travelled += stepDistance;
       }
 
       if (accumulatedAlpha < 0.01) {
