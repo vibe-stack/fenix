@@ -1,5 +1,6 @@
 import { Panel } from '../panels/Panel'
 import type { SimulationProfile } from '../../../editor/models/workspace'
+import { useMemo, useState } from 'react'
 import { useEditorDispatch, useEditorStore } from '../../hooks/useEditorStore'
 
 const simulationProfiles: SimulationProfile[] = [
@@ -15,6 +16,16 @@ export function InspectorPanel() {
   const simulationState = useEditorStore((snapshot) => snapshot.simulationState)
   const viewportState = useEditorStore((snapshot) => snapshot.viewportState)
   const selectedNode = graphState.nodeCatalog.find((node) => node.id === graphState.selectedNodeId)
+  const [domainDraft, setDomainDraft] = useState<[number, number, number]>(
+    simulationState.domainResolution,
+  )
+  const domainVoxelCount = useMemo(
+    () => domainDraft[0] * domainDraft[1] * domainDraft[2],
+    [domainDraft],
+  )
+  const domainChanged = domainDraft.some(
+    (value, index) => value !== simulationState.domainResolution[index],
+  )
 
   return (
     <div>
@@ -100,6 +111,62 @@ export function InspectorPanel() {
         </dl>
       </Panel>
 
+      <Panel title="Domain">
+        <div className="space-y-3 px-3 py-3">
+          <div className="grid grid-cols-3 gap-2">
+            {(['W', 'H', 'D'] as const).map((axis, index) => (
+              <label key={axis} className="flex flex-col gap-1">
+                <span className="text-[9px] uppercase tracking-[0.2em] text-(--fenix-text-muted)">
+                  {axis}
+                </span>
+                <input
+                  type="number"
+                  min={32}
+                  max={512}
+                  step={8}
+                  value={domainDraft[index]}
+                  onChange={(event) => {
+                    const nextValue = clampDomainInput(Number(event.target.value))
+
+                    setDomainDraft((current) => {
+                      const next = [...current] as [number, number, number]
+
+                      next[index] = nextValue
+
+                      return next
+                    })
+                  }}
+                  className="h-8 w-full border border-(--fenix-border) bg-(--fenix-bg) px-2 text-xs tabular-nums text-(--fenix-text) outline-none focus:border-(--fenix-accent)"
+                />
+              </label>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] uppercase tracking-[0.18em] text-(--fenix-text-muted)">
+              Voxels
+            </span>
+            <span className="text-xs tabular-nums text-(--fenix-text)">
+              {domainVoxelCount.toLocaleString()}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            disabled={!domainChanged}
+            onClick={() => {
+              dispatch({
+                type: 'simulation/set-domain-resolution',
+                resolution: domainDraft,
+              })
+            }}
+            className="h-8 w-full bg-(--fenix-accent) px-3 text-[10px] font-medium uppercase tracking-[0.18em] text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            Recompile
+          </button>
+        </div>
+      </Panel>
+
       {/* Sim profile selection */}
       <Panel title="Sim Profile">
         <div className="flex flex-col gap-px">
@@ -124,4 +191,12 @@ export function InspectorPanel() {
       </Panel>
     </div>
   )
+}
+
+function clampDomainInput(value: number) {
+  if (!Number.isFinite(value)) {
+    return 32
+  }
+
+  return Math.max(32, Math.min(512, Math.round(value / 8) * 8))
 }

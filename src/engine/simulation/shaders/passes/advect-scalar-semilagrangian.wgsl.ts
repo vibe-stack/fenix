@@ -56,13 +56,13 @@ export function scalarDecayWGSL() {
 fn writeDecayedScalars(id: vec3<u32>, samplePosition: vec3<f32>) {
   let index = flatten(id);
   let normalizedY = (f32(id.y) + 0.5) / f32(volumeInfo.height);
-  let cooling = params.deltaTime * (0.04 + normalizedY * 0.14);
-  let smokeLoss = params.deltaTime * (0.015 + normalizedY * 0.05);
+  let cooling = params.deltaTime * (0.018 + normalizedY * 0.055);
+  let smokeLoss = params.deltaTime * (0.01 + normalizedY * 0.032);
 
   densityTarget[index] = clamp01(max(0.0, sampleDensity(samplePosition) * (1.0 - smokeLoss)));
   temperatureTarget[index] = clamp01(max(0.0, sampleTemperature(samplePosition) - cooling));
   fuelTarget[index] = clamp01(max(0.0, sampleFuel(samplePosition) - params.deltaTime * 0.025));
-  reactionTarget[index] = clamp01(max(0.0, sampleReaction(samplePosition) - params.deltaTime * 4.35));
+  reactionTarget[index] = clamp01(max(0.0, sampleReaction(samplePosition) - params.deltaTime * 0.72));
 }
 `
 }

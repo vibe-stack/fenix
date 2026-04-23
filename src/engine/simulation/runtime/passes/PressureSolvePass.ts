@@ -7,11 +7,8 @@ import { createPressureResidualShader } from '../../shaders/passes/pressure-resi
 import { createPressureRestrictionShader } from '../../shaders/passes/pressure-restriction.wgsl'
 import { createStaticBuffer, createStorageBuffer, halveResolution, voxelCountFor } from '../combustion-volume-simulation/buffers'
 import {
-  PRESSURE_POST_SMOOTH_FINE,
-  PRESSURE_POST_SMOOTH_MID,
-  PRESSURE_PRE_SMOOTH_FINE,
-  PRESSURE_PRE_SMOOTH_MID,
-  PRESSURE_SMOOTH_COARSE,
+  type PressureIterationSchedule,
+  pressureIterationScheduleFor,
 } from '../combustion-volume-simulation/constants'
 import type { ComputeResources, PressureBufferId, PressureLevel } from '../combustion-volume-simulation/types'
 import { createComputeResources } from '../shared/createComputeResources'
@@ -26,6 +23,7 @@ export class PressureSolvePass {
   private readonly restrictMidToCoarse: ComputeResources
   private readonly prolongateCoarse: Record<PressureBufferId, ComputeResources>
   private readonly prolongateMid: Record<PressureBufferId, ComputeResources>
+  private readonly iterations: PressureIterationSchedule
 
   constructor(device: GPUDevice, resolution: VolumeResolution) {
     const clear = createComputePipeline(device, 'clear-storage-buffer', 'clear-storage-buffer-shader', createClearStorageBufferShader())
@@ -35,6 +33,7 @@ export class PressureSolvePass {
     const prolongate = createComputePipeline(device, 'prolongate-pressure', 'pressure-prolongation-shader', createPressureProlongationShader())
 
     this.fine = createLevel(device, 'fine', resolution, clear, residual, jacobi)
+    this.iterations = pressureIterationScheduleFor(resolution)
     this.mid = createLevel(device, 'mid', halveResolution(resolution), clear, residual, jacobi)
     this.coarse = createLevel(device, 'coarse', halveResolution(this.mid.resolution), clear, residual, jacobi)
     this.restrictFineToMid = createComputeResources(device, restrict, 'restrict-fine-to-mid', [
@@ -61,28 +60,26 @@ export class PressureSolvePass {
 
   clear(encoder: GPUCommandEncoder) {
     for (const level of [this.fine, this.mid, this.coarse]) {
-      dispatchLinear(encoder, 'clear-divergence-pass', level.clearDivergence, level.voxelCount)
       dispatchLinear(encoder, 'clear-pressure-a-pass', level.clearPressureA, level.voxelCount)
-      dispatchLinear(encoder, 'clear-pressure-b-pass', level.clearPressureB, level.voxelCount)
     }
   }
 
   solve(encoder: GPUCommandEncoder): PressureBufferId {
-    const finePre = smooth(encoder, this.fine, PRESSURE_PRE_SMOOTH_FINE, 'a')
+    const finePre = smooth(encoder, this.fine, this.iterations.finePre, 'a')
     dispatchVolume(encoder, 'compute-pressure-residual-pass', residualResources(this.fine, finePre), this.fine.resolution)
     dispatchVolume(encoder, 'restrict-pressure-pass', this.restrictFineToMid, this.mid.resolution)
 
-    const midPre = smooth(encoder, this.mid, PRESSURE_PRE_SMOOTH_MID, 'a')
+    const midPre = smooth(encoder, this.mid, this.iterations.midPre, 'a')
     dispatchVolume(encoder, 'compute-pressure-residual-pass', residualResources(this.mid, midPre), this.mid.resolution)
     dispatchVolume(encoder, 'restrict-pressure-pass', this.restrictMidToCoarse, this.coarse.resolution)
 
-    const coarse = smooth(encoder, this.coarse, PRESSURE_SMOOTH_COARSE, 'a')
+    const coarse = smooth(encoder, this.coarse, this.iterations.coarse, 'a')
     dispatchVolume(encoder, 'prolongate-pressure-pass', this.prolongateCoarse[coarse], this.mid.resolution)
 
-    const mid = smooth(encoder, this.mid, PRESSURE_POST_SMOOTH_MID, midPre)
+    const mid = smooth(encoder, this.mid, this.iterations.midPost, midPre)
     dispatchVolume(encoder, 'prolongate-pressure-pass', this.prolongateMid[mid], this.fine.resolution)
 
-    return smooth(encoder, this.fine, PRESSURE_POST_SMOOTH_FINE, finePre)
+    return smooth(encoder, this.fine, this.iterations.finePost, finePre)
   }
 
   dispose() {

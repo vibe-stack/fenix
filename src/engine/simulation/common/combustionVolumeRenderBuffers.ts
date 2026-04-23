@@ -3,4 +3,6 @@ export interface CombustionVolumeRenderBuffers {
   temperature: GPUBuffer
   fuel: GPUBuffer
   reaction: GPUBuffer
+  activeBrickFlags?: GPUBuffer
+  activeBrickInfo?: GPUBuffer
 }

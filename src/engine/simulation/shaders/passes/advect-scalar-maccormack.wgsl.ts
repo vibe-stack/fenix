@@ -56,13 +56,13 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   let index = flatten(id);
   let coord = vec3<f32>(id) + vec3<f32>(0.5);
   let normalizedY = (f32(id.y) + 0.5) / f32(volumeInfo.height);
-  let cooling = params.deltaTime * (0.04 + normalizedY * 0.14);
-  let smokeLoss = params.deltaTime * (0.015 + normalizedY * 0.05);
+  let cooling = params.deltaTime * (0.018 + normalizedY * 0.055);
+  let smokeLoss = params.deltaTime * (0.01 + normalizedY * 0.032);
 
   densityTarget[index] = clamp01(max(0.0, advectDensity(coord) * (1.0 - smokeLoss)));
   temperatureTarget[index] = clamp01(max(0.0, advectTemperature(coord) - cooling));
   fuelTarget[index] = clamp01(max(0.0, advectFuel(coord) - params.deltaTime * 0.025));
-  reactionTarget[index] = clamp01(max(0.0, advectReaction(coord) - params.deltaTime * 4.35));
+  reactionTarget[index] = clamp01(max(0.0, advectReaction(coord) - params.deltaTime * 0.72));
 }
 `
 }

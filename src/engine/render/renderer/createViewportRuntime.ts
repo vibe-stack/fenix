@@ -1,6 +1,7 @@
 import { createRawWebGPUContext, type RawWebGPUContext } from '../../gpu/context/createRawWebGPUContext'
 import { createOrbitCameraController, type OrbitCameraController } from '../../scene/camera/createOrbitCameraController'
 import { createCombustionVolumeSimulation, type CombustionVolumeSimulation } from '../../simulation/runtime/createCombustionVolumeSimulation'
+import type { VolumeResolution } from '../../simulation/common/volumeResolution'
 import { createVolumeRaymarchPass, type VolumeRaymarchPass } from '../passes/createVolumeRaymarchPass'
 import type { VolumeDisplayMode } from '../volumetrics/volumeDisplayMode'
 
@@ -11,16 +12,19 @@ export interface ViewportRuntime {
 
 interface CreateViewportRuntimeOptions {
   displayMode: VolumeDisplayMode
+  resolution: VolumeResolution
 }
 
 export function createViewportRuntime({
   displayMode,
+  resolution,
 }: CreateViewportRuntimeOptions): ViewportRuntime {
-  return new RawWebGPUViewportRuntime(displayMode)
+  return new RawWebGPUViewportRuntime(displayMode, resolution)
 }
 
 class RawWebGPUViewportRuntime implements ViewportRuntime {
   private readonly displayMode: VolumeDisplayMode
+  private readonly resolution: VolumeResolution
 
   private container: HTMLElement | null = null
   private canvas: HTMLCanvasElement | null = null
@@ -32,8 +36,9 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
   private animationFrameId: number | null = null
   private lastFrameTime = 0
 
-  constructor(displayMode: VolumeDisplayMode) {
+  constructor(displayMode: VolumeDisplayMode, resolution: VolumeResolution) {
     this.displayMode = displayMode
+    this.resolution = resolution
   }
 
   async mount(container: HTMLElement) {
@@ -51,7 +56,9 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
 
     const gpu = await createRawWebGPUContext(canvas)
     const controls = createOrbitCameraController()
-    const simulation = createCombustionVolumeSimulation(gpu.device)
+    const simulation = createCombustionVolumeSimulation(gpu.device, {
+      resolution: this.resolution,
+    })
     const raymarchPass = createVolumeRaymarchPass(gpu.device, gpu.format, simulation.resolution)
 
     controls.attach(canvas)

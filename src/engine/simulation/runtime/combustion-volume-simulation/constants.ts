@@ -1,11 +1,31 @@
+import type { VolumeResolution } from '../../common/volumeResolution'
+
 export const WORKGROUP_SIZE = 4
 export const TILE_SIZE = WORKGROUP_SIZE + 2
 
-export const PRESSURE_PRE_SMOOTH_FINE = 2
-export const PRESSURE_PRE_SMOOTH_MID = 2
-export const PRESSURE_POST_SMOOTH_FINE = 3
-export const PRESSURE_POST_SMOOTH_MID = 3
-export const PRESSURE_SMOOTH_COARSE = 10
+export interface PressureIterationSchedule {
+  finePre: number
+  finePost: number
+  midPre: number
+  midPost: number
+  coarse: number
+}
+
+export function pressureIterationScheduleFor(
+  resolution: VolumeResolution,
+): PressureIterationSchedule {
+  const voxelCount = resolution.width * resolution.height * resolution.depth
+
+  if (voxelCount >= 4_000_000) {
+    return { finePre: 2, finePost: 1, midPre: 2, midPost: 1, coarse: 4 }
+  }
+
+  if (voxelCount >= 1_800_000) {
+    return { finePre: 2, finePost: 2, midPre: 2, midPost: 1, coarse: 6 }
+  }
+
+  return { finePre: 2, finePost: 3, midPre: 2, midPost: 3, coarse: 10 }
+}
 
 export const GPU_BUFFER_UNIFORM = 0x0040
 export const GPU_BUFFER_STORAGE = 0x0080

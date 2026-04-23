@@ -2,12 +2,13 @@ import type { VolumeDisplayMode } from '../volumetrics/volumeDisplayMode'
 import type { RendererDiagnostics } from '../../core/types/platform'
 import { detectWebGPUSupport } from '../../gpu/context/detectWebGPUSupport'
 import type { ViewportRuntime } from './createViewportRuntime'
+import type { VolumeResolution } from '../../simulation/common/volumeResolution'
 
 export interface RendererBridge {
   readonly backendTarget: 'raw-webgpu-device'
   readonly diagnostics: RendererDiagnostics
   refresh(): Promise<RendererDiagnostics>
-  createViewportRuntime(displayMode: VolumeDisplayMode): Promise<ViewportRuntime>
+  createViewportRuntime(displayMode: VolumeDisplayMode, resolution: VolumeResolution): Promise<ViewportRuntime>
 }
 
 export function createRendererBridge(): RendererBridge {
@@ -29,11 +30,12 @@ export function createRendererBridge(): RendererBridge {
 
       return diagnostics
     },
-    async createViewportRuntime(displayMode) {
+    async createViewportRuntime(displayMode, resolution) {
       const { createViewportRuntime } = await import('./createViewportRuntime')
 
       return createViewportRuntime({
         displayMode,
+        resolution,
       })
     },
   }

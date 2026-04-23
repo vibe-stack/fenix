@@ -24,3 +24,7 @@ export type EditorCommand =
       type: 'simulation/set-profile'
       profile: SimulationProfile
     }
+  | {
+      type: 'simulation/set-domain-resolution'
+      resolution: [number, number, number]
+    }

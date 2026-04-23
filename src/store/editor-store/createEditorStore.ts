@@ -93,5 +93,15 @@ function reduceEditorSnapshot(
         },
       }
     }
+
+    case 'simulation/set-domain-resolution': {
+      return {
+        ...snapshot,
+        simulationState: {
+          ...snapshot.simulationState,
+          domainResolution: command.resolution,
+        },
+      }
+    }
   }
 }

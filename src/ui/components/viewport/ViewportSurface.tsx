@@ -1,18 +1,21 @@
 import type { VolumeDisplayMode } from '../../../engine/render/volumetrics/volumeDisplayMode'
 import type { RendererBridge } from '../../../engine/render/renderer/createRendererBridge'
 import { useViewportSurface } from '../../../features/viewport/useViewportSurface'
+import type { VolumeResolution } from '../../../engine/simulation/common/volumeResolution'
 
 interface ViewportSurfaceProps {
   displayMode: VolumeDisplayMode
   rendererBridge: RendererBridge
   runtimeKey: string
+  resolution: VolumeResolution
 }
 
-export function ViewportSurface({ displayMode, rendererBridge, runtimeKey }: ViewportSurfaceProps) {
+export function ViewportSurface({ displayMode, rendererBridge, runtimeKey, resolution }: ViewportSurfaceProps) {
   const { containerRef, mountState, errorMessage } = useViewportSurface(
     displayMode,
     rendererBridge,
     runtimeKey,
+    resolution,
   )
 
   return (

@@ -1,4 +1,5 @@
 import type { VolumeDisplayMode } from '../../engine/render/volumetrics/volumeDisplayMode'
+import type { VolumeResolution } from '../../engine/simulation/common/volumeResolution'
 import { useEffect, useRef, useState } from 'react'
 import type { ViewportMountState } from '../../engine/core/types/platform'
 import type { RendererBridge } from '../../engine/render/renderer/createRendererBridge'
@@ -7,6 +8,7 @@ export function useViewportSurface(
   displayMode: VolumeDisplayMode,
   rendererBridge: RendererBridge,
   runtimeKey: string,
+  resolution: VolumeResolution,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [mountState, setMountState] = useState<ViewportMountState>('booting')
@@ -26,7 +28,7 @@ export function useViewportSurface(
     setErrorMessage(null)
 
     void rendererBridge
-      .createViewportRuntime(displayMode)
+      .createViewportRuntime(displayMode, resolution)
       .then((runtime) => {
         if (!isActive) {
           runtime.dispose()
@@ -54,7 +56,7 @@ export function useViewportSurface(
       isActive = false
       runtimeCleanup?.()
     }
-  }, [displayMode, rendererBridge, runtimeKey])
+  }, [displayMode, rendererBridge, runtimeKey, resolution])
 
   return {
     containerRef,

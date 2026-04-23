@@ -32,12 +32,12 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   let ignition = smoothstep(0.1, 0.55, temperatureField[index]);
   let burn = min(fuelField[index], fuelField[index] * ignition * dt * 2.4);
   let smokeYield = burn * (0.24 + 0.16 * (1.0 - ignition));
-  let heatLoss = dt * (0.08 + normalizedY * 0.22);
+  let heatLoss = dt * (0.025 + normalizedY * 0.075);
   let densityLoss = dt * densityField[index] * (0.025 + normalizedY * 0.08);
   let reactionDecay = reactionField[index] * (1.0 - dt * 0.2);
 
   fuelField[index] = clamp01(fuelField[index] - burn);
-  temperatureField[index] = clamp01(temperatureField[index] + burn * 1.85 - heatLoss);
+  temperatureField[index] = clamp01(temperatureField[index] + burn * 2.35 - heatLoss);
   densityField[index] = clamp01(max(0.0, densityField[index] + smokeYield - densityLoss));
   reactionField[index] = clamp01(max(reactionDecay, burn * 8.0));
 }
