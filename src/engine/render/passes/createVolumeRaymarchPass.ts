@@ -551,9 +551,9 @@ function createVolumeRaymarchShader() {
               let microDetail = cloudMicroDetail(samplePosition, camera.renderMode.z);
               let thermalPattern = thermalPocketPattern(samplePosition, camera.renderMode.z);
               let hotPocket = smoothstep(0.48, 0.9, thermalPattern.x + reaction * 0.28 + hotGas * 0.2);
-              let coolingPocket = smoothstep(0.54, 0.9, 1.0 - thermalPattern.x + thermalPattern.z * 0.22) *
-                smoothstep(0.05, 0.74, density) *
-                (1.0 - smoothstep(0.48, 0.92, hotGas));
+              let coolingPocket = smoothstep(0.52, 0.92, 1.0 - thermalPattern.x + thermalPattern.z * 0.24) *
+                smoothstep(0.04, 0.7, density) *
+                (1.0 - smoothstep(0.5, 0.96, hotGas));
               let bodyPocket = smoothstep(0.22, 0.82, thermalPattern.y + microDetail * 0.32);
               let densityErosion = smoothstep(0.2, 0.78, microDetail + bodyPocket * 0.35 + reaction * 0.14 + hotGas * 0.08);
               let detailContrast = mix(0.46, 1.88, densityErosion) *
@@ -579,23 +579,21 @@ function createVolumeRaymarchShader() {
               let cloudDetail = clamp(gradLength * 7.5 + abs(microDetail - 0.5) * 2.4 + reaction * 0.26, 0.0, 1.0);
               let totalLight = lightTransmission * (keyDiffuse * 0.95 + fillDiffuse * 0.32) + rimLight * 0.42;
               let smokeBase = smokePalette(detailedDensity, temperature, totalLight);
-              let coldSmokeFactor = clamp(coolingPocket * (1.0 - hotPocket * 0.42), 0.0, 1.0);
-              let hotSmokeFactor = clamp(hotPocket * 0.78 + hotGas * 0.34 - coldSmokeFactor * 0.28, 0.0, 1.0);
               let ambientLight = vec3<f32>(0.26, 0.28, 0.31) * (0.22 + heightAmbient * 0.18);
-              let silverLining = vec3<f32>(0.66, 0.69, 0.74) * rimLight * (0.11 + cloudDetail * 0.2 + bodyPocket * 0.08);
-              let warmRim = vec3<f32>(1.0, 0.54, 0.18) * rimLight * (0.05 + temperature * 0.2);
+              let silverLining = vec3<f32>(0.42, 0.45, 0.48) * rimLight * (0.12 + cloudDetail * 0.22 + bodyPocket * 0.08);
+              let warmRim = vec3<f32>(1.0, 0.48, 0.16) * rimLight * (0.06 + temperature * 0.22);
               let creviceShade = 1.0 - cloudDetail * (1.0 - lightTransmission) * mix(0.34, 0.64, coolingPocket);
+              let sootShadow = 1.0 - smoothstep(0.16, 0.82, totalLight) * 0.52;
+              let pocketShadow = 1.0 - coolingPocket * (0.18 + cloudDetail * 0.26);
               let sootColor = mix(
-                vec3<f32>(0.004, 0.004, 0.006),
-                vec3<f32>(0.048, 0.045, 0.042),
-                clamp(totalLight * 0.26 + temperature * 0.05, 0.0, 1.0),
+                vec3<f32>(0.008, 0.008, 0.01),
+                vec3<f32>(0.09, 0.085, 0.08),
+                clamp(totalLight * 0.35 + temperature * 0.08, 0.0, 1.0),
               );
-              let warmSmoke = smokeBase + vec3<f32>(0.24, 0.082, 0.024) * hotSmokeFactor;
-              let phaseSmoke = mix(warmSmoke, sootColor, coldSmokeFactor * 0.84);
-              let smokeColor = phaseSmoke * mix(0.48 + totalLight * 0.24, 0.68 + totalLight * 0.42, hotSmokeFactor) * creviceShade +
-                ambientLight * detailedDensity * mix(0.14, 0.1, coldSmokeFactor) +
-                silverLining * (0.5 + hotSmokeFactor * 0.28) +
-                warmRim * (0.22 + hotSmokeFactor * 0.22);
+              let warmSmoke = smokeBase + vec3<f32>(0.16, 0.055, 0.016) * hotPocket * hotGas;
+              let phaseSmoke = mix(warmSmoke, sootColor, coolingPocket * 0.84);
+              let smokeColor = phaseSmoke * (0.5 + totalLight * 0.28) * creviceShade * sootShadow * pocketShadow +
+                ambientLight * detailedDensity * 0.18 + silverLining + warmRim * 0.34;
               let fireColor = firePalette(temperature);
               let heatIsland = smoothstep(0.04, 0.42, hotGas) * mix(0.45, 1.45, hotPocket);
               let crackMask = heatIsland *
@@ -609,8 +607,8 @@ function createVolumeRaymarchShader() {
               var compositeColor = mix(smokeColor, emissive, flameMix);
               let topFade = 1.0 - smoothstep(0.88, 0.995, uvw.y);
               let heatClearing = clamp(1.0 - crackMask * 0.82 - hotGas * hotPocket * 0.2, 0.12, 1.0);
-              var opacity = (1.0 - exp(-detailedDensity * delta * (1.08 + cloudDetail * 0.56) * mix(2.7, 4.1, coldSmokeFactor))) *
-                topFade * heatClearing * mix(0.92, 1.1, coldSmokeFactor);
+              var opacity = (1.0 - exp(-detailedDensity * delta * (1.28 + cloudDetail * 0.68) * 3.0)) *
+                topFade * heatClearing;
 
               compositeColor += emissive * (forwardScatter * 0.62 + rimLight * 0.14);
               opacity = max(opacity, fireAlpha * 0.52 * topFade);
