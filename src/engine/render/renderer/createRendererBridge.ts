@@ -34,7 +34,6 @@ export function createRendererBridge(): RendererBridge {
 
       return createViewportRuntime({
         displayMode,
-        resolveDiagnostics: () => diagnostics,
       })
     },
   }

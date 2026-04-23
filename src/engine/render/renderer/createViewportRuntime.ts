@@ -1,4 +1,3 @@
-import type { RendererDiagnostics } from '../../core/types/platform'
 import { createRawWebGPUContext, type RawWebGPUContext } from '../../gpu/context/createRawWebGPUContext'
 import { createOrbitCameraController, type OrbitCameraController } from '../../scene/camera/createOrbitCameraController'
 import { createCombustionVolumeSimulation, type CombustionVolumeSimulation } from '../../simulation/runtime/createCombustionVolumeSimulation'
@@ -12,19 +11,16 @@ export interface ViewportRuntime {
 
 interface CreateViewportRuntimeOptions {
   displayMode: VolumeDisplayMode
-  resolveDiagnostics(): RendererDiagnostics
 }
 
 export function createViewportRuntime({
   displayMode,
-  resolveDiagnostics,
 }: CreateViewportRuntimeOptions): ViewportRuntime {
-  return new RawWebGPUViewportRuntime(displayMode, resolveDiagnostics)
+  return new RawWebGPUViewportRuntime(displayMode)
 }
 
 class RawWebGPUViewportRuntime implements ViewportRuntime {
   private readonly displayMode: VolumeDisplayMode
-  private readonly resolveDiagnostics: () => RendererDiagnostics
 
   private container: HTMLElement | null = null
   private canvas: HTMLCanvasElement | null = null
@@ -36,12 +32,8 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
   private animationFrameId: number | null = null
   private lastFrameTime = 0
 
-  constructor(
-    displayMode: VolumeDisplayMode,
-    resolveDiagnostics: () => RendererDiagnostics,
-  ) {
+  constructor(displayMode: VolumeDisplayMode) {
     this.displayMode = displayMode
-    this.resolveDiagnostics = resolveDiagnostics
   }
 
   async mount(container: HTMLElement) {
@@ -51,14 +43,6 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
 
     this.dispose()
     this.container = container
-
-    const diagnostics = this.resolveDiagnostics()
-
-    if (diagnostics.supportState !== 'ready') {
-      throw new Error(
-        'WebGPU adapter is required for the viewport runtime, but no adapter is currently available.',
-      )
-    }
 
     const canvas = document.createElement('canvas')
 

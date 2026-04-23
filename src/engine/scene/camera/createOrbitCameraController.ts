@@ -31,12 +31,12 @@ export function createOrbitCameraController(): OrbitCameraController {
   let aspect = 1
   let yaw = -0.62
   let pitch = 0.31
-  let radius = 9.4
+  let radius = 58
   let pointerId: number | null = null
   let lastX = 0
   let lastY = 0
 
-  const target = createVector3(0, 2.95, 0)
+  const target = createVector3(0, 18, 0)
 
   const onPointerDown = (event: PointerEvent) => {
     if (event.button !== 0) {
@@ -77,7 +77,7 @@ export function createOrbitCameraController(): OrbitCameraController {
 
   const onWheel = (event: WheelEvent) => {
     event.preventDefault()
-    radius = clamp(radius + event.deltaY * 0.01, 4.5, 18)
+    radius = clamp(radius + event.deltaY * 0.045, 18, 220)
   }
 
   return {
@@ -111,7 +111,7 @@ export function createOrbitCameraController(): OrbitCameraController {
         right,
         up,
         aspect,
-        tanHalfFovY: Math.tan((42 * Math.PI) / 180),
+        tanHalfFovY: Math.tan((48 * Math.PI) / 180),
       }
     },
     dispose() {

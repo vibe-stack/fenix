@@ -1,4 +1,6 @@
 import type { RendererDiagnostics } from '../../core/types/platform'
+import { createWebGPUUnavailableMessage } from './describeWebGPUPageContext'
+import { requestWebGPUAdapter } from './requestWebGPUAdapter'
 
 interface GPUAdapterLike {
   features?: Iterable<string>
@@ -9,9 +11,7 @@ interface GPUAdapterLike {
 }
 
 type NavigatorWithGPU = Navigator & {
-  gpu?: {
-    requestAdapter(): Promise<GPUAdapterLike | null>
-  }
+  gpu?: GPU
 }
 
 function createFallbackDiagnostics(message: string): RendererDiagnostics {
@@ -32,27 +32,32 @@ export async function detectWebGPUSupport(): Promise<RendererDiagnostics> {
   const runtimeNavigator = navigator as NavigatorWithGPU
 
   if (!runtimeNavigator.gpu) {
-    return createFallbackDiagnostics('WebGPU is unavailable in this browser, so the editor stays in shell mode.')
+    return createFallbackDiagnostics(createWebGPUUnavailableMessage())
   }
 
   try {
-    const adapter = await runtimeNavigator.gpu.requestAdapter()
+    const { adapter, requestMode, errorMessage } = await requestWebGPUAdapter(runtimeNavigator.gpu)
 
     if (!adapter) {
-      return createFallbackDiagnostics('WebGPU exists but no adapter was granted by the browser.')
+      return createFallbackDiagnostics(
+        errorMessage
+          ? `WebGPU exists but no adapter was granted after trying default, high-performance, and low-power requests. Last browser error: ${errorMessage}`
+          : 'WebGPU exists but no adapter was granted after trying default, high-performance, and low-power requests.',
+      )
     }
 
     const adapterName =
-      adapter.info?.description?.trim() ||
-      adapter.info?.vendor?.trim() ||
+      (adapter as GPUAdapterLike).info?.description?.trim() ||
+      (adapter as GPUAdapterLike).info?.vendor?.trim() ||
       'WebGPU adapter ready'
     const featureCount = adapter.features ? Array.from(adapter.features).length : 0
+    const requestModeLabel = requestMode === 'default' ? 'default request' : `${requestMode} request`
 
     return {
       supportState: 'ready',
       backend: 'webgpu',
       adapterName,
-      message: `WebGPU adapter acquired with ${featureCount} reported feature${featureCount === 1 ? '' : 's'}.`,
+      message: `WebGPU adapter acquired via ${requestModeLabel} with ${featureCount} reported feature${featureCount === 1 ? '' : 's'}.`,
       featureCount,
     }
   } catch (error) {

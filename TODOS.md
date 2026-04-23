@@ -17,12 +17,18 @@
 - [x] Replaced the Three.js-owned viewport runtime with one raw WebGPU device that runs GPU compute simulation and direct volume raymarch rendering in the same frame graph.
 - [x] Removed the CPU simulation loop and CPU readback/upload path from the active viewport runtime.
 - [x] Split the active GPU solver into explicit source, velocity-advection, scalar-advection, divergence, pressure, and projection passes with separate density, temperature, fuel, and turbulence buffers.
+- [x] Reworked pressure solving into a first multilevel GPU scaffold with fine/mid/coarse volumes, residual restriction, additive prolongation, and pre/post smoothing instead of a flat single-level iteration loop.
+- [x] Moved divergence, residual, pressure smoothing, and projection stencils onto workgroup-local tiled kernels to reduce repeated global neighbor fetches.
 
 ## Next Up
 
 - [ ] Add persistence and project serialization to the editor store boundary.
 - [ ] Build the first node graph data model with editable nodes, connections, validation, and serialization.
 - [ ] Expand the editor store into command history, persistence, and multi-panel selection coordination.
-- [ ] Improve the new GPU simulation passes with better advection quality, vorticity confinement, MAC-grid velocity storage, pressure accuracy, and render-side empty-space skipping.
+- [ ] Replace the current dense collocated velocity field with a MAC-grid layout and update advection/projection accordingly.
+- [ ] Improve advection quality with higher-order or corrective advection instead of the current basic semi-Lagrangian path.
+- [ ] Add vorticity confinement, better combustion shaping, and stronger smoke breakup so the plume stops reading like a soft torch.
+- [ ] Improve the multilevel pressure path from a first scaffold into a stricter V-cycle with better residual/correction handling and profiling-driven iteration budgets.
+- [ ] Add render-side empty-space skipping, step adaptation, and lighting/shadow quality upgrades for better visual density at lower raymarch cost.
 - [ ] Introduce sparse brick allocation, active-brick tracking, and sparse-aware volume upload/rendering so the dense prototype can evolve toward EmberGen-class scale.
 - [ ] Establish import aliases and testing strategy before the module graph gets wider.

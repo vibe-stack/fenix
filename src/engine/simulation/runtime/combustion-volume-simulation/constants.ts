@@ -1,0 +1,13 @@
+export const WORKGROUP_SIZE = 4
+export const TILE_SIZE = WORKGROUP_SIZE + 2
+
+export const PRESSURE_PRE_SMOOTH_FINE = 2
+export const PRESSURE_PRE_SMOOTH_MID = 2
+export const PRESSURE_POST_SMOOTH_FINE = 3
+export const PRESSURE_POST_SMOOTH_MID = 3
+export const PRESSURE_SMOOTH_COARSE = 10
+
+export const GPU_BUFFER_UNIFORM = 0x0040
+export const GPU_BUFFER_STORAGE = 0x0080
+export const GPU_BUFFER_COPY_SRC = 0x0004
+export const GPU_BUFFER_COPY_DST = 0x0008

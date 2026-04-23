@@ -1,3 +1,6 @@
+import { createWebGPUUnavailableMessage } from './describeWebGPUPageContext'
+import { requestWebGPUAdapter } from './requestWebGPUAdapter'
+
 export interface RawWebGPUContext {
   adapter: GPUAdapter
   device: GPUDevice
@@ -11,13 +14,17 @@ export async function createRawWebGPUContext(
   canvas: HTMLCanvasElement,
 ): Promise<RawWebGPUContext> {
   if (!navigator.gpu) {
-    throw new Error('WebGPU is unavailable in this browser.')
+    throw new Error(createWebGPUUnavailableMessage())
   }
 
-  const adapter = await navigator.gpu.requestAdapter()
+  const { adapter, errorMessage } = await requestWebGPUAdapter(navigator.gpu)
 
   if (!adapter) {
-    throw new Error('The browser exposed WebGPU but did not grant an adapter.')
+    throw new Error(
+      errorMessage
+        ? `The browser exposed WebGPU but did not grant an adapter after trying default, high-performance, and low-power requests. Last browser error: ${errorMessage}`
+        : 'The browser exposed WebGPU but did not grant an adapter after trying default, high-performance, and low-power requests.',
+    )
   }
 
   const supportedStorageBuffers = adapter.limits.maxStorageBuffersPerShaderStage
