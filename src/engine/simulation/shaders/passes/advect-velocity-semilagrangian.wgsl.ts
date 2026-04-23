@@ -35,7 +35,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   let coord = vec3<f32>(id) + vec3<f32>(0.5);
   let backPosition = coord - sampleVelocity(coord - vec3<f32>(0.5)) * params.deltaTime;
   let advectedVelocity = sampleVelocity(backPosition - vec3<f32>(0.5)) *
-    (1.0 - params.deltaTime * 0.08);
+    (1.0 - params.deltaTime * 0.025);
 
   velocityTarget[index] = vec4<f32>(advectedVelocity, 0.0);
 }

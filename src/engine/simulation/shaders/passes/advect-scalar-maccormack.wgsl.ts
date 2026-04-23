@@ -1,4 +1,5 @@
 import { WORKGROUP_SIZE } from '../../runtime/combustion-volume-simulation/constants'
+import { ActiveBrickMaskWGSL } from '../common/active-brick-mask.wgsl'
 import { ClampUtilsWGSL } from '../common/clamp-utils.wgsl'
 import { IndexingWGSL } from '../common/indexing.wgsl'
 import { createScalarSamplerWGSL } from '../common/sampling-scalar.wgsl'
@@ -12,6 +13,7 @@ export function createAdvectScalarMacCormackShader() {
   return joinWGSL([
     SimulationParamsWGSL,
     VolumeInfoWGSL,
+    ActiveBrickMaskWGSL,
     scalarAdvectionBindingsWGSL(),
     IndexingWGSL,
     ClampUtilsWGSL,
@@ -54,6 +56,14 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   }
 
   let index = flatten(id);
+  if (!isActiveCoord(id)) {
+    densityTarget[index] = 0.0;
+    temperatureTarget[index] = 0.0;
+    fuelTarget[index] = 0.0;
+    reactionTarget[index] = 0.0;
+    return;
+  }
+
   let coord = vec3<f32>(id) + vec3<f32>(0.5);
   let normalizedY = (f32(id.y) + 0.5) / f32(volumeInfo.height);
   let cooling = params.deltaTime * (0.018 + normalizedY * 0.055);

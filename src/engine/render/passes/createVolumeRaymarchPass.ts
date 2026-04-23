@@ -33,7 +33,8 @@ export function createVolumeRaymarchPass(
     z: 2.05 * volumeScale * (resolution.depth / maxHorizontalResolution),
   }
   const volumeCenterY = volumeHalfExtents.y - 0.25
-  const stepCount = 96
+  const voxelCount = resolution.width * resolution.height * resolution.depth
+  const stepCount = voxelCount >= 4_000_000 ? 88 : voxelCount >= 1_800_000 ? 112 : 144
   const cameraBuffer = device.createBuffer({
     label: 'volume-camera-buffer',
     size: 16 * 9,
@@ -457,11 +458,27 @@ function createVolumeRaymarchShader() {
       );
     }
 
+    fn thermalPocketPattern(position: vec3<f32>, time: f32) -> vec3<f32> {
+      let p = position + vec3<f32>(time * 2.2, time * 5.2, -time * 1.7);
+      let body = 0.5 + 0.5 * sin(dot(p, vec3<f32>(0.061, 0.082, -0.053)) + sin(p.y * 0.052) * 1.9);
+      let pocket = 0.5 + 0.5 * sin(dot(p, vec3<f32>(0.134, -0.076, 0.112)) + sin(p.x * 0.105 + p.z * 0.069) * 1.25);
+      let rising = 0.5 + 0.5 * sin(p.x * 0.17 + p.y * 0.12 - p.z * 0.15 + time * 1.45);
+      let cluster = clamp(body * 0.48 + pocket * 0.34 + rising * 0.18, 0.0, 1.0);
+      let cellular = abs(body - pocket);
+      let ridge = 1.0 - abs(cluster * 2.0 - 1.0);
+
+      return vec3<f32>(cluster, ridge, cellular);
+    }
+
     fn cloudMicroDetail(position: vec3<f32>, time: f32) -> f32 {
       let low = sin(dot(position, vec3<f32>(0.23, 0.17, 0.29)) + time * 0.17);
       let mid = sin(dot(position, vec3<f32>(0.71, -0.39, 0.54)) + sin(position.y * 0.19) * 1.7);
       let high = sin(position.x * 1.37 + position.y * 0.63 - position.z * 1.11 + time * 0.09);
-      return clamp(0.5 + low * 0.24 + mid * 0.18 + high * 0.1, 0.0, 1.0);
+      let folded = abs(sin(position.x * 0.41 + sin(position.z * 0.27)) *
+        sin(position.y * 0.36 - position.z * 0.31) *
+        sin(dot(position, vec3<f32>(0.19, 0.47, -0.34))));
+      let ridge = 1.0 - abs(folded * 2.0 - 1.0);
+      return clamp(0.42 + low * 0.2 + mid * 0.16 + high * 0.08 + ridge * 0.34, 0.0, 1.0);
     }
 
     @vertex
@@ -520,15 +537,28 @@ function createVolumeRaymarchShader() {
           let samplePosition = uvw * (vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0));
           if (isActiveSample(samplePosition)) {
             let density = max(sampleDensity(samplePosition) - 0.005, 0.0);
+            let temperature = sampleTemperature(samplePosition);
+            let fuel = sampleFuel(samplePosition);
+            let reaction = sampleReaction(samplePosition);
+            let hotGas = clamp(temperature * 1.55 + fuel * 0.26 + reaction * 0.44, 0.0, 1.0);
 
-            if (density > 0.001) {
-              let temperature = sampleTemperature(samplePosition);
-              let fuel = sampleFuel(samplePosition);
-              let reaction = sampleReaction(samplePosition);
+            if (density > 0.001 || hotGas > 0.018) {
               let microDetail = cloudMicroDetail(samplePosition, camera.renderMode.z);
-              let densityErosion = smoothstep(0.22, 0.82, microDetail + reaction * 0.12);
-              let detailedDensity = max(density * mix(0.68, 1.38, densityErosion), 0.0);
-              let densityGrad = densityGradient(samplePosition);
+              let thermalPattern = thermalPocketPattern(samplePosition, camera.renderMode.z);
+              let hotPocket = smoothstep(0.48, 0.9, thermalPattern.x + reaction * 0.28 + hotGas * 0.2);
+              let coolingPocket = smoothstep(0.52, 0.92, 1.0 - thermalPattern.x + thermalPattern.z * 0.24) *
+                smoothstep(0.04, 0.7, density) *
+                (1.0 - smoothstep(0.5, 0.96, hotGas));
+              let bodyPocket = smoothstep(0.22, 0.82, thermalPattern.y + microDetail * 0.32);
+              let densityErosion = smoothstep(0.2, 0.78, microDetail + bodyPocket * 0.35 + reaction * 0.14 + hotGas * 0.08);
+              let detailContrast = mix(0.46, 1.88, densityErosion) *
+                mix(0.84, 1.42, bodyPocket) *
+                mix(1.0, 1.26, coolingPocket);
+              let detailedDensity = max(pow(density, 0.92) * detailContrast, 0.0);
+              var densityGrad = vec3<f32>(0.0);
+              if (detailedDensity > 0.002) {
+                densityGrad = densityGradient(samplePosition);
+              }
               let gradLength = max(length(densityGrad), 0.0001);
               let smokeNormal = -densityGrad / gradLength;
               let keyDiffuse = clamp(dot(smokeNormal, lightDirection) * 0.5 + 0.5, 0.0, 1.0);
@@ -536,35 +566,42 @@ function createVolumeRaymarchShader() {
               let rimLight = pow(1.0 - clamp(dot(smokeNormal, -rayDirection), 0.0, 1.0), 1.7);
               let heightAmbient = smoothstep(0.02, 0.95, uvw.y);
               let lightProbePosition = clamp(uvw + lightDirection * 0.03, vec3<f32>(0.0), vec3<f32>(1.0));
-              let shadowProbe = sampleDensity(lightProbePosition * (vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0)));
+              var shadowProbe = 0.0;
+              if (detailedDensity > 0.004) {
+                shadowProbe = sampleDensity(lightProbePosition * (vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0)));
+              }
               let lightTransmission = 1.0 - clamp(shadowProbe * 0.22, 0.0, 0.38);
               let forwardScatter = pow(clamp(dot(-rayDirection, lightDirection), 0.0, 1.0), 1.05) * 0.62 + 0.52;
-              let cloudDetail = clamp(gradLength * 5.5 + abs(microDetail - 0.5) * 1.75 + reaction * 0.22, 0.0, 1.0);
+              let cloudDetail = clamp(gradLength * 7.5 + abs(microDetail - 0.5) * 2.4 + reaction * 0.26, 0.0, 1.0);
               let totalLight = lightTransmission * (keyDiffuse * 0.95 + fillDiffuse * 0.32) + rimLight * 0.42;
               let smokeBase = smokePalette(detailedDensity, temperature, totalLight);
               let ambientLight = vec3<f32>(0.7, 0.75, 0.82) * (0.52 + heightAmbient * 0.34);
-              let silverLining = vec3<f32>(0.92, 0.96, 1.0) * rimLight * (0.28 + cloudDetail * 0.34);
+              let silverLining = vec3<f32>(0.92, 0.96, 1.0) * rimLight * (0.34 + cloudDetail * 0.52 + bodyPocket * 0.18);
               let warmRim = vec3<f32>(1.0, 0.55, 0.19) * rimLight * (0.08 + temperature * 0.24);
-              let creviceShade = 1.0 - cloudDetail * (1.0 - lightTransmission) * 0.32;
-              let smokeColor = smokeBase * (0.74 + totalLight * 0.55) * creviceShade +
+              let creviceShade = 1.0 - cloudDetail * (1.0 - lightTransmission) * mix(0.34, 0.64, coolingPocket);
+              let ashColor = vec3<f32>(0.34, 0.35, 0.36) * (0.82 + totalLight * 0.24);
+              let warmSmoke = smokeBase + vec3<f32>(0.18, 0.07, 0.025) * hotPocket * hotGas;
+              let phaseSmoke = mix(warmSmoke, ashColor, coolingPocket * 0.72);
+              let smokeColor = phaseSmoke * (0.74 + totalLight * 0.55) * creviceShade +
                 ambientLight * detailedDensity * 0.45 + silverLining + warmRim * 0.42;
               let fireColor = firePalette(temperature);
-              let hotGas = clamp(temperature * 1.35 + fuel * 0.22 + reaction * 0.34, 0.0, 1.0);
-              let crackMask = smoothstep(0.045, 0.38, hotGas) *
-                (1.0 - smoothstep(0.82, 1.25, detailedDensity)) *
-                (0.82 + reaction * 1.05);
+              let heatIsland = smoothstep(0.04, 0.42, hotGas) * mix(0.45, 1.45, hotPocket);
+              let crackMask = heatIsland *
+                (1.0 - smoothstep(1.22, 2.65, detailedDensity)) *
+                (0.78 + reaction * 1.25 + bodyPocket * 0.38) *
+                (1.0 - coolingPocket * 0.58);
               let emissive = fireColor * (temperature * (fuel * 1.35 + 1.15)) *
-                (reaction * 1.1 + 1.75) * (1.0 + forwardScatter * 0.55);
-              let flameMix = clamp(crackMask * 1.05 + fuel * 0.14, 0.0, 0.92);
-              let fireAlpha = 1.0 - exp(-hotGas * (fuel + reaction * 0.2 + 0.1) * delta * 5.8);
+                (reaction * 1.55 + 2.35) * (1.0 + forwardScatter * 0.72) * mix(0.62, 1.55, hotPocket);
+              let flameMix = clamp(crackMask * 1.36 + fuel * 0.16 + hotGas * 0.08, 0.0, 0.97);
+              let fireAlpha = 1.0 - exp(-hotGas * (fuel + reaction * 0.34 + 0.16) * delta * mix(6.2, 12.5, hotPocket));
               var compositeColor = mix(smokeColor, emissive, flameMix);
               let topFade = 1.0 - smoothstep(0.88, 0.995, uvw.y);
-              let heatClearing = 1.0 - crackMask * 0.58;
+              let heatClearing = clamp(1.0 - crackMask * 0.82 - hotGas * hotPocket * 0.2, 0.12, 1.0);
               var opacity = (1.0 - exp(-detailedDensity * delta * (1.28 + cloudDetail * 0.68) * 3.0)) *
                 topFade * heatClearing;
 
-              compositeColor += emissive * (forwardScatter * 0.48 + rimLight * 0.1);
-              opacity = max(opacity, fireAlpha * 0.28 * topFade);
+              compositeColor += emissive * (forwardScatter * 0.62 + rimLight * 0.14);
+              opacity = max(opacity, fireAlpha * 0.52 * topFade);
 
               if (camera.renderMode.x < 0.5) {
                 let temperatureColor = firePalette(clamp(temperature * 0.88 + fuel * 0.16, 0.0, 1.0));

@@ -14,6 +14,8 @@ export class BuoyancyPass {
     volumeInfo: GPUBuffer,
     fields: readonly [ScalarFieldBuffers, ScalarFieldBuffers],
     velocity: GPUBuffer,
+    activeBrickFlags: readonly [GPUBuffer, GPUBuffer],
+    activeBrickInfo: GPUBuffer,
   ) {
     const pipeline = createComputePipeline(
       device,
@@ -21,13 +23,15 @@ export class BuoyancyPass {
       'apply-buoyancy-force-shader',
       createApplyBuoyancyShader(),
     )
-    this.resources = fields.map((field) =>
+    this.resources = fields.map((field, index) =>
       createComputeResources(device, pipeline, `${field.density.label}-buoyancy`, [
         simulationParams,
         volumeInfo,
         field.density,
         field.temperature,
         velocity,
+        activeBrickFlags[index],
+        activeBrickInfo,
       ]),
     ) as typeof this.resources
   }

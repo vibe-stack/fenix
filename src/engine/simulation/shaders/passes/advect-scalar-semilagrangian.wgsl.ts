@@ -1,4 +1,5 @@
 import { WORKGROUP_SIZE } from '../../runtime/combustion-volume-simulation/constants'
+import { ActiveBrickMaskWGSL } from '../common/active-brick-mask.wgsl'
 import { ClampUtilsWGSL } from '../common/clamp-utils.wgsl'
 import { IndexingWGSL } from '../common/indexing.wgsl'
 import { createScalarSamplerWGSL } from '../common/sampling-scalar.wgsl'
@@ -11,6 +12,7 @@ export function createAdvectScalarSemiLagrangianShader() {
   return joinWGSL([
     SimulationParamsWGSL,
     VolumeInfoWGSL,
+    ActiveBrickMaskWGSL,
     scalarAdvectionBindingsWGSL(),
     IndexingWGSL,
     ClampUtilsWGSL,
@@ -24,6 +26,15 @@ export function createAdvectScalarSemiLagrangianShader() {
 @compute @workgroup_size(${WORKGROUP_SIZE}, ${WORKGROUP_SIZE}, ${WORKGROUP_SIZE})
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   if (!insideVolume(id)) {
+    return;
+  }
+
+  if (!isActiveCoord(id)) {
+    let index = flatten(id);
+    densityTarget[index] = 0.0;
+    temperatureTarget[index] = 0.0;
+    fuelTarget[index] = 0.0;
+    reactionTarget[index] = 0.0;
     return;
   }
 
@@ -48,6 +59,8 @@ export function scalarAdvectionBindingsWGSL() {
 @group(0) @binding(8) var<storage, read_write> temperatureTarget: array<f32>;
 @group(0) @binding(9) var<storage, read_write> fuelTarget: array<f32>;
 @group(0) @binding(10) var<storage, read_write> reactionTarget: array<f32>;
+@group(0) @binding(11) var<storage, read> activeBrickFlags: array<u32>;
+@group(0) @binding(12) var<uniform> brickInfo: BrickInfo;
 `
 }
 

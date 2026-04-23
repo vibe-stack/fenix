@@ -16,6 +16,8 @@ export class ScalarAdvectionPass {
     volumeInfo: GPUBuffer,
     fields: readonly [ScalarFieldBuffers, ScalarFieldBuffers],
     velocity: GPUBuffer,
+    activeBrickFlags: readonly [GPUBuffer, GPUBuffer],
+    activeBrickInfo: GPUBuffer,
   ) {
     const semiPipeline = createComputePipeline(
       device,
@@ -30,8 +32,26 @@ export class ScalarAdvectionPass {
       createAdvectScalarMacCormackShader(),
     )
 
-    this.semiResources = createPairResources(device, semiPipeline, simulationParams, volumeInfo, fields, velocity)
-    this.maccormackResources = createPairResources(device, maccormackPipeline, simulationParams, volumeInfo, fields, velocity)
+    this.semiResources = createPairResources(
+      device,
+      semiPipeline,
+      simulationParams,
+      volumeInfo,
+      fields,
+      velocity,
+      activeBrickFlags,
+      activeBrickInfo,
+    )
+    this.maccormackResources = createPairResources(
+      device,
+      maccormackPipeline,
+      simulationParams,
+      volumeInfo,
+      fields,
+      velocity,
+      activeBrickFlags,
+      activeBrickInfo,
+    )
   }
 
   dispatch(
@@ -53,10 +73,32 @@ function createPairResources(
   volumeInfo: GPUBuffer,
   fields: readonly [ScalarFieldBuffers, ScalarFieldBuffers],
   velocity: GPUBuffer,
+  activeBrickFlags: readonly [GPUBuffer, GPUBuffer],
+  activeBrickInfo: GPUBuffer,
 ) {
   return [
-    createScalarResources(device, pipeline, simulationParams, volumeInfo, fields[0], velocity, fields[1]),
-    createScalarResources(device, pipeline, simulationParams, volumeInfo, fields[1], velocity, fields[0]),
+    createScalarResources(
+      device,
+      pipeline,
+      simulationParams,
+      volumeInfo,
+      fields[0],
+      velocity,
+      fields[1],
+      activeBrickFlags[0],
+      activeBrickInfo,
+    ),
+    createScalarResources(
+      device,
+      pipeline,
+      simulationParams,
+      volumeInfo,
+      fields[1],
+      velocity,
+      fields[0],
+      activeBrickFlags[1],
+      activeBrickInfo,
+    ),
   ] as const
 }
 
@@ -68,6 +110,8 @@ function createScalarResources(
   source: ScalarFieldBuffers,
   velocity: GPUBuffer,
   target: ScalarFieldBuffers,
+  activeBrickFlags: GPUBuffer,
+  activeBrickInfo: GPUBuffer,
 ) {
   return createComputeResources(device, pipeline, `${source.density.label}-scalar-advection`, [
     simulationParams,
@@ -81,5 +125,7 @@ function createScalarResources(
     target.temperature,
     target.fuel,
     target.reaction,
+    activeBrickFlags,
+    activeBrickInfo,
   ])
 }

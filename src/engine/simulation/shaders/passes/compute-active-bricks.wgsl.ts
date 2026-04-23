@@ -17,7 +17,7 @@ struct BrickInfo {
 @group(0) @binding(2) var<storage, read> densityField: array<f32>;
 @group(0) @binding(3) var<storage, read> temperatureField: array<f32>;
 @group(0) @binding(4) var<storage, read> reactionField: array<f32>;
-@group(0) @binding(5) var<storage, read_write> activeBrickFlags: array<u32>;
+@group(0) @binding(5) var<storage, read_write> activeBrickFlags: array<atomic<u32>>;
 `,
     IndexingWGSL,
     /* wgsl */ `
@@ -28,13 +28,13 @@ fn main(@builtin(global_invocation_id) brickId: vec3<u32>) {
   }
 
   let brickSize = brickInfo.params.x;
-  let brickIndex = brickId.x + brickInfo.counts.x * (brickId.y + brickInfo.counts.y * brickId.z);
   let base = brickId * vec3<u32>(brickSize);
   var activeFlag = 0u;
 
-  for (var z = 0u; z < brickSize; z += 1u) {
-    for (var y = 0u; y < brickSize; y += 1u) {
-      for (var x = 0u; x < brickSize; x += 1u) {
+  let stride = max(brickSize / 4u, 1u);
+  for (var z = 0u; z < brickSize; z += stride) {
+    for (var y = 0u; y < brickSize; y += stride) {
+      for (var x = 0u; x < brickSize; x += stride) {
         let coord = base + vec3<u32>(x, y, z);
         if (coord.x < volumeInfo.width && coord.y < volumeInfo.height && coord.z < volumeInfo.depth) {
           let fieldIndex = flatten(coord);
@@ -47,7 +47,30 @@ fn main(@builtin(global_invocation_id) brickId: vec3<u32>) {
     }
   }
 
-  activeBrickFlags[brickIndex] = activeFlag;
+  let center = min(base + vec3<u32>(brickSize / 2u), vec3<u32>(volumeInfo.width - 1u, volumeInfo.height - 1u, volumeInfo.depth - 1u));
+  let centerIndex = flatten(center);
+  let centerEnergy = densityField[centerIndex] + temperatureField[centerIndex] * 0.7 + reactionField[centerIndex] * 0.9;
+  if (centerEnergy > 0.012) {
+    activeFlag = 1u;
+  }
+
+  if (activeFlag == 0u) {
+    return;
+  }
+
+  for (var z = -1i; z <= 1i; z += 1i) {
+    for (var y = -1i; y <= 1i; y += 1i) {
+      for (var x = -1i; x <= 1i; x += 1i) {
+        let neighbor = vec3<u32>(
+          u32(clamp(i32(brickId.x) + x, 0i, i32(brickInfo.counts.x) - 1i)),
+          u32(clamp(i32(brickId.y) + y, 0i, i32(brickInfo.counts.y) - 1i)),
+          u32(clamp(i32(brickId.z) + z, 0i, i32(brickInfo.counts.z) - 1i)),
+        );
+        let neighborIndex = neighbor.x + brickInfo.counts.x * (neighbor.y + brickInfo.counts.y * neighbor.z);
+        atomicStore(&activeBrickFlags[neighborIndex], 1u);
+      }
+    }
+  }
 }
 `,
   ])

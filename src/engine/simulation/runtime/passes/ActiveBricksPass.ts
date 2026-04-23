@@ -13,7 +13,7 @@ export class ActiveBricksPass {
     volumeInfo: GPUBuffer,
     brickInfo: GPUBuffer,
     fields: readonly [ScalarFieldBuffers, ScalarFieldBuffers],
-    activeBrickFlags: GPUBuffer,
+    activeBrickFlags: readonly [GPUBuffer, GPUBuffer],
   ) {
     const pipeline = createComputePipeline(
       device,
@@ -22,14 +22,14 @@ export class ActiveBricksPass {
       createComputeActiveBricksShader(),
     )
 
-    this.resources = fields.map((field) =>
+    this.resources = fields.map((field, index) =>
       createComputeResources(device, pipeline, `${field.density.label}-active-bricks`, [
         volumeInfo,
         brickInfo,
         field.density,
         field.temperature,
         field.reaction,
-        activeBrickFlags,
+        activeBrickFlags[index],
       ]),
     ) as typeof this.resources
   }

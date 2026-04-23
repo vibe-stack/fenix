@@ -13,6 +13,8 @@ export class CombustionPass {
     simulationParams: GPUBuffer,
     volumeInfo: GPUBuffer,
     fields: readonly [ScalarFieldBuffers, ScalarFieldBuffers],
+    activeBrickFlags: readonly [GPUBuffer, GPUBuffer],
+    activeBrickInfo: GPUBuffer,
   ) {
     const pipeline = createComputePipeline(
       device,
@@ -20,7 +22,7 @@ export class CombustionPass {
       'update-combustion-state-shader',
       createCombustionUpdateShader(),
     )
-    this.resources = fields.map((field) =>
+    this.resources = fields.map((field, index) =>
       createComputeResources(device, pipeline, `${field.density.label}-combustion`, [
         simulationParams,
         volumeInfo,
@@ -28,6 +30,8 @@ export class CombustionPass {
         field.temperature,
         field.fuel,
         field.reaction,
+        activeBrickFlags[index],
+        activeBrickInfo,
       ]),
     ) as typeof this.resources
   }

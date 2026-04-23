@@ -35,7 +35,9 @@ fn sourcePulse(blastSource: ExplosionSource) -> f32 {
   let duration = max(blastSource.timing.y, 0.001);
   let normalizedAge = clamp(age / duration, 0.0, 1.0);
   let pulseGate = step(0.0, age) * step(age, duration);
-  return pulseGate * exp(-normalizedAge * normalizedAge * 2.4);
+  let attack = smoothstep(0.0, 0.12, normalizedAge);
+  let decay = exp(-max(normalizedAge - 0.08, 0.0) * 2.35);
+  return pulseGate * attack * decay;
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE}, ${WORKGROUP_SIZE}, ${WORKGROUP_SIZE})
@@ -61,14 +63,18 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let core = exp(-distanceRatio * distanceRatio * 3.5) * sourcePulse(blastSource);
 
     if (core > 0.0001) {
+      let age = params.time - blastSource.timing.x;
+      let normalizedAge = clamp(age / max(blastSource.timing.y, 0.001), 0.0, 1.0);
+      let hotFlash = core * (1.0 - smoothstep(0.22, 0.95, normalizedAge));
+      let smokeRelease = core * smoothstep(0.14, 0.82, normalizedAge);
       let shock = exp(-abs(distanceRatio - 0.84) * 10.0) * core;
       let direction = normalize(offset + vec3<f32>(0.0, 0.12, 0.0));
       let heatVent = smoothstep(9.0, 20.0, blastSource.yields.y) * core;
       density = clamp01(max(0.0, density - heatVent * params.deltaTime * 3.2) +
-        core * blastSource.yields.x * params.deltaTime);
-      temperature = clamp01(temperature + core * blastSource.yields.y * params.deltaTime);
-      fuel = clamp01(fuel + core * blastSource.yields.z * params.deltaTime);
-      reaction = clamp01(max(reaction, core * blastSource.yields.w));
+        smokeRelease * blastSource.yields.x * params.deltaTime);
+      temperature = clamp01(temperature + (core * 0.42 + hotFlash * 1.08) * blastSource.yields.y * params.deltaTime);
+      fuel = clamp01(fuel + (core * 0.35 + hotFlash * 0.9) * blastSource.yields.z * params.deltaTime);
+      reaction = clamp01(max(reaction, max(core * 0.35, hotFlash) * blastSource.yields.w));
       velocity += direction * shock * blastSource.impulse.x * params.deltaTime;
       velocity.y += core * blastSource.impulse.y * params.deltaTime;
     }

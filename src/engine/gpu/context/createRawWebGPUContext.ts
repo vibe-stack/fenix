@@ -8,7 +8,7 @@ export interface RawWebGPUContext {
   format: GPUTextureFormat
 }
 
-const REQUIRED_STORAGE_BUFFERS_PER_STAGE = 9
+const REQUIRED_STORAGE_BUFFERS_PER_STAGE = 10
 
 export async function createRawWebGPUContext(
   canvas: HTMLCanvasElement,

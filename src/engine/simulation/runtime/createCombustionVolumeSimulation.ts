@@ -8,6 +8,7 @@ import {
   voxelCountFor,
 } from './combustion-volume-simulation/buffers'
 import { GPU_BUFFER_COPY_DST, GPU_BUFFER_UNIFORM } from './combustion-volume-simulation/constants'
+import { createSimulationPerformanceSchedule } from './combustion-volume-simulation/performance'
 import type {
   CombustionVolumeSimulation,
   PressureBufferId,
@@ -55,11 +56,17 @@ export function createCombustionVolumeSimulation(
   const vorticityMagnitude = createStorageBuffer(device, 'vorticity-magnitude', voxelCount * 4)
   const confinementForceMagnitude = createStorageBuffer(device, 'confinement-force-magnitude', voxelCount * 4)
   const velocityMagnitude = createStorageBuffer(device, 'velocity-magnitude', voxelCount * 4)
-  const activeBrickFlags = createStorageBuffer(
+  const activeBrickFlagsA = createStorageBuffer(
     device,
-    'active-sparse-brick-flags',
+    'active-sparse-brick-flags-a',
     sparseLayout.brickCount * 4,
   )
+  const activeBrickFlagsB = createStorageBuffer(
+    device,
+    'active-sparse-brick-flags-b',
+    sparseLayout.brickCount * 4,
+  )
+  const activeBrickFlags = [activeBrickFlagsA, activeBrickFlagsB] as const
   const activeBrickInfo = createStaticBuffer(
     device,
     'active-sparse-brick-info',
@@ -87,8 +94,18 @@ export function createCombustionVolumeSimulation(
     volumeInfo,
     scalarFields,
     velocityScratch,
+    activeBrickFlags,
+    activeBrickInfo,
   )
-  const buoyancy = new BuoyancyPass(device, simulationParamsBuffer, volumeInfo, scalarFields, velocityScratch)
+  const buoyancy = new BuoyancyPass(
+    device,
+    simulationParamsBuffer,
+    volumeInfo,
+    scalarFields,
+    velocityScratch,
+    activeBrickFlags,
+    activeBrickInfo,
+  )
   const vorticityPass = new VorticityPass(
     device,
     volumeInfo,
@@ -105,7 +122,14 @@ export function createCombustionVolumeSimulation(
     velocityScratch,
     confinementForceMagnitude,
   )
-  const combustion = new CombustionPass(device, simulationParamsBuffer, volumeInfo, scalarFields)
+  const combustion = new CombustionPass(
+    device,
+    simulationParamsBuffer,
+    volumeInfo,
+    scalarFields,
+    activeBrickFlags,
+    activeBrickInfo,
+  )
   const divergence = new DivergencePass(device, volumeInfo, velocityScratch, pressureSolve.fine.divergence)
   const projection = new ProjectionPass(device, pressureSolve.fine, velocityScratch, velocityCurrent)
   const debugFields = new DebugFieldsPass(device, volumeInfo, velocityCurrent, velocityMagnitude)
@@ -127,17 +151,20 @@ export function createCombustionVolumeSimulation(
   clear.clear(initEncoder, vorticityMagnitude, voxelCount)
   clear.clear(initEncoder, confinementForceMagnitude, voxelCount)
   clear.clear(initEncoder, velocityMagnitude, voxelCount)
-  clear.clear(initEncoder, activeBrickFlags, sparseLayout.brickCount)
+  clear.clear(initEncoder, activeBrickFlagsA, sparseLayout.brickCount)
+  clear.clear(initEncoder, activeBrickFlagsB, sparseLayout.brickCount)
   pressureSolve.clear(initEncoder)
   device.queue.submit([initEncoder.finish()])
 
   let currentScalarSet = 0
   let scalarAdvectionMode = options.scalarAdvectionMode ?? 'maccormack'
+  let performanceSchedule = createSimulationPerformanceSchedule(resolution, scalarAdvectionMode)
   let initialized = false
   let simulationStartSeconds = 0
   let lastElapsedSeconds = 0
   let lastPressureBuffer: PressureBufferId = 'a'
   let debugRequested = false
+  let simulationStepIndex = 0
   const shouldRunDebugEachFrame = voxelCount < 1_800_000
 
   return {
@@ -161,30 +188,47 @@ export function createCombustionVolumeSimulation(
 
       const nextScalarSet = currentScalarSet === 0 ? 1 : 0
 
-      pressureSolve.clear(encoder)
       sourceInjection.dispatch(encoder, resolution, currentScalarSet)
+      clear.clear(encoder, activeBrickFlags[currentScalarSet], sparseLayout.brickCount)
+      activeBricks.dispatch(encoder, sparseLayout, currentScalarSet)
       velocityAdvection.dispatch(encoder, resolution)
-      scalarAdvection.dispatch(encoder, resolution, currentScalarSet, scalarAdvectionMode)
+      scalarAdvection.dispatch(
+        encoder,
+        resolution,
+        currentScalarSet,
+        performanceSchedule.scalarAdvectionMode,
+      )
+      clear.clear(encoder, activeBrickFlags[nextScalarSet], sparseLayout.brickCount)
+      activeBricks.dispatch(encoder, sparseLayout, nextScalarSet)
       buoyancy.dispatch(encoder, resolution, nextScalarSet)
-      vorticityPass.dispatch(encoder, resolution)
-      confinement.dispatch(encoder, resolution)
+
+      if (simulationStepIndex % performanceSchedule.vorticityInterval === 0) {
+        vorticityPass.dispatch(encoder, resolution)
+        confinement.dispatch(encoder, resolution)
+      }
+
       combustion.dispatch(encoder, resolution, nextScalarSet)
-      divergence.dispatch(encoder, pressureSolve.fine.resolution)
-      lastPressureBuffer = pressureSolve.solve(encoder)
+
+      if (simulationStepIndex % performanceSchedule.pressureInterval === 0) {
+        pressureSolve.clear(encoder)
+        divergence.dispatch(encoder, pressureSolve.fine.resolution)
+        lastPressureBuffer = pressureSolve.solve(encoder)
+      }
+
       projection.dispatch(encoder, pressureSolve.fine, lastPressureBuffer)
+
       if (shouldRunDebugEachFrame || debugRequested) {
         debugFields.dispatch(encoder, resolution)
         debugRequested = false
       }
-      activeBricks.dispatch(encoder, sparseLayout, nextScalarSet)
-
       currentScalarSet = nextScalarSet
       lastElapsedSeconds = elapsedSeconds
+      simulationStepIndex += 1
     },
     getRenderBuffers() {
       return {
         ...scalarFields[currentScalarSet],
-        activeBrickFlags,
+        activeBrickFlags: activeBrickFlags[currentScalarSet],
         activeBrickInfo,
       }
     },
@@ -207,6 +251,7 @@ export function createCombustionVolumeSimulation(
     },
     setScalarAdvectionMode(mode) {
       scalarAdvectionMode = mode
+      performanceSchedule = createSimulationPerformanceSchedule(resolution, scalarAdvectionMode)
     },
     dispose() {
       simulationParamsBuffer.destroy()
@@ -218,7 +263,8 @@ export function createCombustionVolumeSimulation(
       vorticityMagnitude.destroy()
       confinementForceMagnitude.destroy()
       velocityMagnitude.destroy()
-      activeBrickFlags.destroy()
+      activeBrickFlagsA.destroy()
+      activeBrickFlagsB.destroy()
       activeBrickInfo.destroy()
       sourceInjection.dispose()
       pressureSolve.dispose()

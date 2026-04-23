@@ -26,10 +26,13 @@ export function dispatchLinear(
   resources: ComputeResources,
   itemCount: number,
 ) {
+  const workgroupCount = Math.max(1, Math.ceil(itemCount / 256))
+  const workgroupsX = Math.min(workgroupCount, 65_535)
+  const workgroupsY = Math.ceil(workgroupCount / workgroupsX)
   const pass = encoder.beginComputePass({ label })
 
   pass.setPipeline(resources.pipeline)
   pass.setBindGroup(0, resources.bindGroup)
-  pass.dispatchWorkgroups(Math.ceil(itemCount / 256))
+  pass.dispatchWorkgroups(workgroupsX, workgroupsY)
   pass.end()
 }

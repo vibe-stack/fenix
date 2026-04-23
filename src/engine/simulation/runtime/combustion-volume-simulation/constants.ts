@@ -17,7 +17,7 @@ export function pressureIterationScheduleFor(
   const voxelCount = resolution.width * resolution.height * resolution.depth
 
   if (voxelCount >= 4_000_000) {
-    return { finePre: 2, finePost: 1, midPre: 2, midPost: 1, coarse: 4 }
+    return { finePre: 1, finePost: 1, midPre: 1, midPost: 0, coarse: 2 }
   }
 
   if (voxelCount >= 1_800_000) {
