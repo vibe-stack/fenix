@@ -35,7 +35,7 @@ export function createVolumeRaymarchPass(
   }
   const volumeCenterY = volumeHalfExtents.y - 0.25
   const voxelCount = resolution.width * resolution.height * resolution.depth
-  const stepCount = voxelCount >= 4_000_000 ? 450 : voxelCount >= 1_800_000 ? 400 : 260
+  const stepCount = voxelCount >= 4_000_000 ? 200 : voxelCount >= 1_800_000 ? 120 : 160
   const cameraBuffer = device.createBuffer({
     label: 'volume-camera-buffer',
     size: Float32Array.BYTES_PER_ELEMENT * CAMERA_DATA_FLOATS,

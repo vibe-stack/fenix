@@ -12,7 +12,7 @@ export interface ExplosionSource {
 }
 const delay = 4;
 export const cinematicExplosionSources: readonly ExplosionSource[] = [
-  source([0.5, 0.11, 0.5], 0.3, delay + 0.03, 4.74, 3.4, 9.0, 12.0, 128.05, 64.0, 48.8),
+  source([0.5, 0.11, 0.5], 0.3, delay + 0.03, 4.74, 3.4, 9.0, 12.0, 42.05, 64.0, 48.8),
   source([0.7, 0.1, 0.5], 0.2, delay + 4.03, 2.74, 12.4, 24.0, 4.0, 4.05, 48.0, 24.8),
   source([0.7, 0.35, 0.3], 0.1, delay + 8.03, 6.74, 6.4, 48.0, 2.0, 12.05, 4.0, 96.8),
   source([0.8, 0.1, 0.55], 0.12, delay + 9.53, 3.74, 4.4, 23.0, 22.0, 4.05, 3.0, 256.8),
