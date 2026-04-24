@@ -66,16 +66,41 @@ export function scalarAdvectionBindingsWGSL() {
 
 export function scalarDecayWGSL() {
   return /* wgsl */ `
+fn scalarThermalNoise(position: vec3<f32>) -> f32 {
+  let p = position + vec3<f32>(params.time * 1.7, -params.time * 3.1, params.time * 1.1);
+  let a = 0.5 + 0.5 * sin(dot(p, vec3<f32>(0.097, 0.061, -0.083)));
+  let b = 0.5 + 0.5 * sin(dot(p, vec3<f32>(-0.043, 0.137, 0.071)) + sin(p.y * 0.079) * 1.6);
+  return clamp(a * 0.58 + b * 0.42, 0.0, 1.0);
+}
+
 fn writeDecayedScalars(id: vec3<u32>, samplePosition: vec3<f32>) {
   let index = flatten(id);
   let normalizedY = (f32(id.y) + 0.5) / f32(volumeInfo.height);
-  let cooling = params.deltaTime * (0.018 + normalizedY * 0.055);
-  let smokeLoss = params.deltaTime * (0.01 + normalizedY * 0.032);
+  let density = sampleDensity(samplePosition);
+  let temperature = sampleTemperature(samplePosition);
+  let fuel = sampleFuel(samplePosition);
+  let reaction = sampleReaction(samplePosition);
+  let thermalNoise = scalarThermalNoise(samplePosition);
+  let hotReservoir = smoothstep(0.22, 0.78, temperature + fuel * 0.2 + reaction * 0.26);
+  let coolingPocket = smoothstep(0.44, 0.9, 1.0 - thermalNoise) *
+    smoothstep(0.08, 0.74, density) *
+    (1.0 - hotReservoir * 0.72);
+  let cooling = params.deltaTime * (0.016 + normalizedY * 0.052) *
+    mix(1.28, 0.58, hotReservoir) *
+    mix(0.86, 1.9, coolingPocket);
+  let smokeLoss = params.deltaTime * (0.008 + normalizedY * 0.026) *
+    mix(0.75, 1.38, thermalNoise);
+  let coldBreakup = params.deltaTime * density *
+    (1.0 - smoothstep(0.2, 0.86, hotReservoir)) *
+    smoothstep(0.18, 0.72, density) *
+    smoothstep(0.34, 0.92, thermalNoise) *
+    0.34;
+  let thermalClearing = params.deltaTime * density * hotReservoir * mix(0.1, 0.72, thermalNoise);
 
-  densityTarget[index] = clamp01(max(0.0, sampleDensity(samplePosition) * (1.0 - smokeLoss)));
-  temperatureTarget[index] = clamp01(max(0.0, sampleTemperature(samplePosition) - cooling));
-  fuelTarget[index] = clamp01(max(0.0, sampleFuel(samplePosition) - params.deltaTime * 0.025));
-  reactionTarget[index] = clamp01(max(0.0, sampleReaction(samplePosition) - params.deltaTime * 0.72));
+  densityTarget[index] = clamp01(max(0.0, density * (1.0 - smokeLoss) - thermalClearing - coldBreakup));
+  temperatureTarget[index] = clamp01(max(0.0, temperature - cooling));
+  fuelTarget[index] = clamp01(max(0.0, fuel - params.deltaTime * mix(0.012, 0.034, thermalNoise)));
+  reactionTarget[index] = clamp01(max(0.0, reaction - params.deltaTime * mix(0.46, 0.82, thermalNoise)));
 }
 `
 }

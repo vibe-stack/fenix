@@ -33,6 +33,8 @@ export type { CombustionVolumeSimulation } from './combustion-volume-simulation/
 export interface CombustionVolumeSimulationOptions {
   scalarAdvectionMode?: ScalarAdvectionMode
   resolution?: VolumeResolution
+  wind?: readonly [number, number, number]
+  windStrength?: number
 }
 
 export function createCombustionVolumeSimulation(
@@ -44,7 +46,7 @@ export function createCombustionVolumeSimulation(
   const sparseLayout = createSparseBrickLayout(resolution)
   const simulationParamsBuffer = device.createBuffer({
     label: 'simulation-params',
-    size: 16,
+    size: 32,
     usage: GPU_BUFFER_UNIFORM | GPU_BUFFER_COPY_DST,
   })
   const scalarA = createScalarFieldBuffers(device, 'scalar-a', voxelCount)
@@ -166,6 +168,8 @@ export function createCombustionVolumeSimulation(
   let debugRequested = false
   let simulationStepIndex = 0
   const shouldRunDebugEachFrame = voxelCount < 1_800_000
+  const wind = options.wind ?? [0.18, 0.0, -0.07]
+  const windStrength = options.windStrength ?? 0.74
 
   return {
     resolution,
@@ -179,12 +183,20 @@ export function createCombustionVolumeSimulation(
       const effectiveStep = Math.max(1 / 120, Math.min(stepSeconds, 1 / 30))
       const localTime = elapsedSeconds - simulationStartSeconds
       const previousLocalTime = lastElapsedSeconds - simulationStartSeconds
-      device.queue.writeBuffer(simulationParamsBuffer, 0, new Float32Array([
-        localTime,
-        effectiveStep,
-        previousLocalTime,
-        currentScalarSet,
-      ]))
+      device.queue.writeBuffer(
+        simulationParamsBuffer,
+        0,
+        new Float32Array([
+          localTime,
+          effectiveStep,
+          previousLocalTime,
+          currentScalarSet,
+          wind[0],
+          wind[1],
+          wind[2],
+          windStrength,
+        ]),
+      )
 
       const nextScalarSet = currentScalarSet === 0 ? 1 : 0
 

@@ -4,5 +4,6 @@ struct SimulationParams {
   deltaTime: f32,
   previousTime: f32,
   scalarSetIndex: f32,
+  wind: vec4<f32>,
 }
 `

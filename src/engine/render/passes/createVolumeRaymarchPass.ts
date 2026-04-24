@@ -35,7 +35,7 @@ export function createVolumeRaymarchPass(
   }
   const volumeCenterY = volumeHalfExtents.y - 0.25
   const voxelCount = resolution.width * resolution.height * resolution.depth
-  const stepCount = voxelCount >= 4_000_000 ? 200 : voxelCount >= 1_800_000 ? 120 : 160
+  const stepCount = voxelCount >= 4_000_000 ? 200 : voxelCount >= 1_800_000 ? 400 : 180
   const cameraBuffer = device.createBuffer({
     label: 'volume-camera-buffer',
     size: Float32Array.BYTES_PER_ELEMENT * CAMERA_DATA_FLOATS,
@@ -628,31 +628,51 @@ function createVolumeRaymarchShader() {
               );
               let warmSmoke = smokeBase + vec3<f32>(0.16, 0.055, 0.016) * hotPocket * hotGas;
               let phaseSmoke = mix(warmSmoke, sootColor, coolingPocket * 0.84);
+              let localHeat = clamp(temperature * 0.74 + fuel * 0.16 + reaction * 0.18, 0.0, 1.0);
+              let localHotSoot = smoothstep(0.1, 0.68, localHeat) *
+                smoothstep(0.04, 0.56, detailedDensity) *
+                smoothstep(0.18, 0.86, thermalPattern.x + bodyPocket * 0.24) *
+                (1.0 - coolingPocket * 0.55);
+              let smokeGlowColor = firePalette(clamp(localHeat * 0.86 + localHotSoot * 0.12, 0.0, 1.0));
+              let smokeIllumination = smokeGlowColor * localHotSoot *
+                (0.72 + localHeat * 1.15 + forwardScatter * 0.28) *
+                (0.42 + density * 0.58);
               let smokeColor = phaseSmoke * (0.5 + totalLight * 0.28) * creviceShade * sootShadow * pocketShadow +
-                ambientLight * detailedDensity * 0.18 + silverLining + warmRim * 0.34;
-              let fireColor = firePalette(temperature);
+                ambientLight * detailedDensity * 0.18 + silverLining + warmRim * 0.34 + smokeIllumination;
               let heatIsland = smoothstep(0.04, 0.42, hotGas) * mix(0.45, 1.45, hotPocket);
+              let fireWindow = smoothstep(0.18, 0.72, hotGas + fuel * 0.18 + reaction * 0.16) *
+                mix(0.38, 0.82, hotPocket);
               let crackMask = heatIsland *
-                (1.0 - smoothstep(1.22, 2.65, detailedDensity)) *
-                (0.78 + reaction * 1.25 + bodyPocket * 0.38) *
-                (1.0 - coolingPocket * 0.58);
-              let emissive = fireColor * (temperature * (fuel * 1.35 + 1.15)) *
-                (reaction * 1.55 + 2.35) * (1.0 + forwardScatter * 0.72) * mix(0.62, 1.55, hotPocket);
-              let flameMix = clamp(crackMask * 1.36 + fuel * 0.16 + hotGas * 0.08, 0.0, 0.97);
-              let fireAlpha = 1.0 - exp(-hotGas * (fuel + reaction * 0.34 + 0.16) * delta * mix(6.2, 12.5, hotPocket));
-              var compositeColor = mix(smokeColor, emissive, flameMix);
+                smoothstep(0.32, 0.92, thermalPattern.y + bodyPocket * 0.26 + reaction * 0.08) *
+                (1.0 - smoothstep(0.86, 2.6, detailedDensity)) *
+                (1.0 - coolingPocket * 0.5);
+              let flameHeat = clamp(temperature * 0.86 + fuel * 0.1 + reaction * 0.08, 0.0, 1.0);
+              let emissive = firePalette(flameHeat) * (flameHeat * (fuel * 0.42 + 0.38)) *
+                (reaction * 0.42 + 0.7) *
+                (1.0 + forwardScatter * 0.72) *
+                mix(0.42, 1.05, hotPocket);
+              let flameMix = clamp(crackMask * 0.48 + fuel * 0.05 + hotGas * 0.035, 0.0, 0.48);
+              let fireAlpha = 1.0 - exp(-hotGas * (fuel + reaction * 0.22 + 0.12) * delta * mix(4.0, 8.2, hotPocket));
+              var compositeColor = mix(smokeColor, smokeColor + emissive, flameMix);
               let topFade = 1.0 - smoothstep(0.88, 0.995, uvw.y);
-              let heatClearing = clamp(1.0 - crackMask * 0.82 - hotGas * hotPocket * 0.2, 0.12, 1.0);
-              var opacity = (1.0 - exp(-detailedDensity * delta * (1.28 + cloudDetail * 0.68) * 3.0)) *
-                topFade * heatClearing;
+              let heatTranslucency = clamp(1.0 - localHotSoot * 0.18 - fireWindow * 0.12, 0.72, 1.0);
+              var opacity = (1.0 - exp(-detailedDensity * delta * (1.12 + cloudDetail * 0.5) * 2.55)) *
+                topFade * heatTranslucency;
 
-              compositeColor += emissive * (forwardScatter * 0.62 + rimLight * 0.14);
-              opacity = max(opacity, fireAlpha * 0.52 * topFade);
+              opacity = max(opacity, fireAlpha * mix(0.16, 0.34, fireWindow) * topFade);
 
               if (camera.renderMode.x < 0.5) {
-                let temperatureColor = firePalette(clamp(temperature * 0.88 + fuel * 0.16, 0.0, 1.0));
-                compositeColor = mix(smokeColor * 0.72, temperatureColor, clamp(crackMask + fuel * 0.12, 0.0, 1.0));
-                compositeColor += temperatureColor * forwardScatter * 0.35;
+                let temperatureColor = firePalette(localHeat);
+                let directCoreGlow = smoothstep(0.06, 0.58, hotGas + fuel * 0.12 + reaction * 0.1) *
+                  (1.0 - smoothstep(0.14, 0.72, detailedDensity)) *
+                  mix(0.48, 1.0, hotPocket);
+                let hotSmokeGlow = localHotSoot * 0.9;
+                compositeColor = mix(
+                  smokeColor * 0.82,
+                  smokeColor + temperatureColor * (hotSmokeGlow + directCoreGlow * 1.85),
+                  clamp(hotSmokeGlow + directCoreGlow + hotGas * 0.16, 0.0, 0.86),
+                );
+                opacity = max(opacity, directCoreGlow * topFade * 0.42);
               }
 
               if (camera.renderMode.x > 0.5 && camera.renderMode.x < 1.5) {
@@ -689,7 +709,7 @@ function createVolumeRaymarchShader() {
 
       let finalColor = pow(accumulatedColor, vec3<f32>(0.92));
 
-      return vec4<f32>(finalColor * accumulatedAlpha, accumulatedAlpha);
+      return vec4<f32>(finalColor, accumulatedAlpha);
     }
   `
 }
