@@ -27,10 +27,19 @@ export interface GraphState {
   nodeCatalog: GraphNodeDefinition[]
 }
 
+export interface ViewportBackgroundState {
+  imageDataUrl: string | null
+  imageName: string | null
+  offsetX: number
+  offsetY: number
+  scale: number
+}
+
 export interface ViewportState {
   activeCamera: string
   shadingMode: ViewportShadingMode
   overlays: string[]
+  background: ViewportBackgroundState
 }
 
 export interface SimulationState extends SimulationDefaults {

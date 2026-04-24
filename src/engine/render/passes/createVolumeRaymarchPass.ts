@@ -458,27 +458,61 @@ function createVolumeRaymarchShader() {
       );
     }
 
-    fn thermalPocketPattern(position: vec3<f32>, time: f32) -> vec3<f32> {
-      let p = position + vec3<f32>(time * 2.2, time * 5.2, -time * 1.7);
-      let body = 0.5 + 0.5 * sin(dot(p, vec3<f32>(0.061, 0.082, -0.053)) + sin(p.y * 0.052) * 1.9);
-      let pocket = 0.5 + 0.5 * sin(dot(p, vec3<f32>(0.134, -0.076, 0.112)) + sin(p.x * 0.105 + p.z * 0.069) * 1.25);
-      let rising = 0.5 + 0.5 * sin(p.x * 0.17 + p.y * 0.12 - p.z * 0.15 + time * 1.45);
-      let cluster = clamp(body * 0.48 + pocket * 0.34 + rising * 0.18, 0.0, 1.0);
-      let cellular = abs(body - pocket);
-      let ridge = 1.0 - abs(cluster * 2.0 - 1.0);
+    fn hashNoise3D(position: vec3<f32>) -> f32 {
+      return fract(sin(dot(position, vec3<f32>(127.1, 311.7, 74.7))) * 43758.5453123);
+    }
+
+    fn valueNoise3D(position: vec3<f32>) -> f32 {
+      let cell = floor(position);
+      let fraction = fract(position);
+      let smoooth = fraction * fraction * (vec3<f32>(3.0) - 2.0 * fraction);
+      let c000 = hashNoise3D(cell);
+      let c100 = hashNoise3D(cell + vec3<f32>(1.0, 0.0, 0.0));
+      let c010 = hashNoise3D(cell + vec3<f32>(0.0, 1.0, 0.0));
+      let c110 = hashNoise3D(cell + vec3<f32>(1.0, 1.0, 0.0));
+      let c001 = hashNoise3D(cell + vec3<f32>(0.0, 0.0, 1.0));
+      let c101 = hashNoise3D(cell + vec3<f32>(1.0, 0.0, 1.0));
+      let c011 = hashNoise3D(cell + vec3<f32>(0.0, 1.0, 1.0));
+      let c111 = hashNoise3D(cell + vec3<f32>(1.0, 1.0, 1.0));
+      let x00 = mix(c000, c100, smoooth.x);
+      let x10 = mix(c010, c110, smoooth.x);
+      let x01 = mix(c001, c101, smoooth.x);
+      let x11 = mix(c011, c111, smoooth.x);
+      let y0 = mix(x00, x10, smoooth.y);
+      let y1 = mix(x01, x11, smoooth.y);
+      return mix(y0, y1, smoooth.z);
+    }
+
+    fn thermalPocketPattern(
+      position: vec3<f32>,
+      time: f32,
+      density: f32,
+      reaction: f32,
+      hotGas: f32,
+    ) -> vec3<f32> {
+      let flow = position * 0.082 + vec3<f32>(time * 0.09, time * 0.18, -time * 0.06);
+      let bulk = valueNoise3D(flow + vec3<f32>(reaction * 2.1, density * 0.9, hotGas * 0.55));
+      let pocket = hashNoise3D(floor(flow * 2.4) + vec3<f32>(17.0, 9.0, 13.0));
+      let vent = hashNoise3D(floor(flow * vec3<f32>(1.2, 2.6, 1.4)) + vec3<f32>(5.0, 21.0, 11.0));
+      let cluster = clamp(bulk * 0.62 + pocket * 0.2 + vent * 0.1 + reaction * 0.06, 0.0, 1.0);
+      let ridge = 1.0 - abs((bulk * 0.72 + vent * 0.28) * 2.0 - 1.0);
+      let cellular = abs(bulk - pocket);
 
       return vec3<f32>(cluster, ridge, cellular);
     }
 
-    fn cloudMicroDetail(position: vec3<f32>, time: f32) -> f32 {
-      let low = sin(dot(position, vec3<f32>(0.23, 0.17, 0.29)) + time * 0.17);
-      let mid = sin(dot(position, vec3<f32>(0.71, -0.39, 0.54)) + sin(position.y * 0.19) * 1.7);
-      let high = sin(position.x * 1.37 + position.y * 0.63 - position.z * 1.11 + time * 0.09);
-      let folded = abs(sin(position.x * 0.41 + sin(position.z * 0.27)) *
-        sin(position.y * 0.36 - position.z * 0.31) *
-        sin(dot(position, vec3<f32>(0.19, 0.47, -0.34))));
-      let ridge = 1.0 - abs(folded * 2.0 - 1.0);
-      return clamp(0.42 + low * 0.2 + mid * 0.16 + high * 0.08 + ridge * 0.34, 0.0, 1.0);
+    fn cloudMicroDetail(
+      position: vec3<f32>,
+      time: f32,
+      density: f32,
+      reaction: f32,
+      hotGas: f32,
+    ) -> f32 {
+      let flow = position * 0.21 + vec3<f32>(-time * 0.035, time * 0.028, time * 0.018);
+      let broad = valueNoise3D(flow + vec3<f32>(density * 1.8, reaction * 2.2, hotGas * 1.1));
+      let crisp = hashNoise3D(floor(flow * 4.2) + vec3<f32>(7.0, 19.0, 3.0));
+      let streak = hashNoise3D(floor(flow * vec3<f32>(2.4, 4.8, 2.6)) + vec3<f32>(23.0, 11.0, 29.0));
+      return clamp(broad * 0.58 + crisp * 0.24 + streak * 0.18, 0.0, 1.0);
     }
 
     @vertex
@@ -548,12 +582,14 @@ function createVolumeRaymarchShader() {
             let hotGas = clamp(temperature * 1.55 + fuel * 0.26 + reaction * 0.44, 0.0, 1.0);
 
             if (density > 0.001 || hotGas > 0.018) {
-              let microDetail = cloudMicroDetail(samplePosition, camera.renderMode.z);
-              let thermalPattern = thermalPocketPattern(samplePosition, camera.renderMode.z);
-              let hotPocket = smoothstep(0.48, 0.9, thermalPattern.x + reaction * 0.28 + hotGas * 0.2);
-              let coolingPocket = smoothstep(0.52, 0.92, 1.0 - thermalPattern.x + thermalPattern.z * 0.24) *
-                smoothstep(0.04, 0.7, density) *
-                (1.0 - smoothstep(0.5, 0.96, hotGas));
+              let microDetail = cloudMicroDetail(samplePosition, camera.renderMode.z, density, reaction, hotGas);
+              let thermalPattern = thermalPocketPattern(samplePosition, camera.renderMode.z, density, reaction, hotGas);
+              let heatCore = smoothstep(0.1, 0.78, hotGas * 0.92 + reaction * 0.5);
+              let heatBreakup = smoothstep(0.34, 0.84, thermalPattern.x * 0.78 + thermalPattern.y * 0.22 + reaction * 0.08);
+              let hotPocket = clamp(heatCore * mix(0.72, 1.18, heatBreakup), 0.0, 1.0);
+              let coolCore = smoothstep(0.04, 0.7, density) *
+                (1.0 - smoothstep(0.34, 0.82, hotGas + reaction * 0.28));
+              let coolingPocket = coolCore * smoothstep(0.48, 0.92, 1.0 - thermalPattern.x + thermalPattern.z * 0.28);
               let bodyPocket = smoothstep(0.22, 0.82, thermalPattern.y + microDetail * 0.32);
               let densityErosion = smoothstep(0.2, 0.78, microDetail + bodyPocket * 0.35 + reaction * 0.14 + hotGas * 0.08);
               let detailContrast = mix(0.46, 1.88, densityErosion) *
@@ -568,7 +604,7 @@ function createVolumeRaymarchShader() {
               let smokeNormal = -densityGrad / gradLength;
               let keyDiffuse = clamp(dot(smokeNormal, lightDirection) * 0.5 + 0.5, 0.0, 1.0);
               let fillDiffuse = clamp(dot(smokeNormal, fillDirection) * 0.5 + 0.5, 0.0, 1.0);
-              let rimLight = pow(1.0 - clamp(dot(smokeNormal, -rayDirection), 0.0, 1.0), 1.7);
+              let rimLight = pow(1.0 - clamp(dot(smokeNormal, -rayDirection), 0.0, 1.0), 5.7);
               let heightAmbient = smoothstep(0.02, 0.95, uvw.y);
               let lightProbePosition = clamp(uvw + lightDirection * 0.03, vec3<f32>(0.0), vec3<f32>(1.0));
               var shadowProbe = 0.0;

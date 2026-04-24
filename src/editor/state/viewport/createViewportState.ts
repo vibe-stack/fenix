@@ -5,5 +5,12 @@ export function createViewportState(): ViewportState {
     activeCamera: 'Perspective',
     shadingMode: 'temperature',
     overlays: ['bounds', 'guides', 'stats'],
+    background: {
+      imageDataUrl: null,
+      imageName: null,
+      offsetX: 0,
+      offsetY: 0,
+      scale: 1,
+    },
   }
 }

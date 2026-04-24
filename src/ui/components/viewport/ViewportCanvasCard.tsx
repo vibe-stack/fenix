@@ -18,6 +18,7 @@ export function ViewportCanvasCard({ diagnostics, rendererBridge }: ViewportCanv
 
   return (
     <ViewportSurface
+      background={viewportState.background}
       displayMode={viewportState.shadingMode}
       rendererBridge={rendererBridge}
       runtimeKey={runtimeKey}

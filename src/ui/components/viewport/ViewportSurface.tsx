@@ -1,25 +1,50 @@
+import type { CSSProperties } from 'react'
+import type { ViewportBackgroundState } from '../../../editor/models/workspace'
 import type { VolumeDisplayMode } from '../../../engine/render/volumetrics/volumeDisplayMode'
 import type { RendererBridge } from '../../../engine/render/renderer/createRendererBridge'
 import { useViewportSurface } from '../../../features/viewport/useViewportSurface'
 import type { VolumeResolution } from '../../../engine/simulation/common/volumeResolution'
 
 interface ViewportSurfaceProps {
+  background: ViewportBackgroundState
   displayMode: VolumeDisplayMode
   rendererBridge: RendererBridge
   runtimeKey: string
   resolution: VolumeResolution
 }
 
-export function ViewportSurface({ displayMode, rendererBridge, runtimeKey, resolution }: ViewportSurfaceProps) {
+export function ViewportSurface({
+  background,
+  displayMode,
+  rendererBridge,
+  runtimeKey,
+  resolution,
+}: ViewportSurfaceProps) {
   const { containerRef, mountState, errorMessage } = useViewportSurface(
     displayMode,
     rendererBridge,
     runtimeKey,
     resolution,
   )
+  const backgroundStyle: CSSProperties | undefined = background.imageDataUrl
+    ? {
+        backgroundImage: `url(${background.imageDataUrl})`,
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundSize: 'contain',
+        transform: `translate(${background.offsetX}px, ${background.offsetY}px) scale(${background.scale})`,
+        transformOrigin: 'center center',
+      }
+    : undefined
 
   return (
     <div className="relative flex-1 overflow-hidden bg-zinc-600/20">
+      {backgroundStyle && (
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute inset-0" style={backgroundStyle} />
+        </div>
+      )}
+
       <div ref={containerRef} className="absolute inset-0" />
       {/* <div className="pointer-events-none absolute inset-0 opacity-35" /> */}
 

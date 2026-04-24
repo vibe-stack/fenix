@@ -15,6 +15,7 @@ export function InspectorPanel() {
   const projectState = useEditorStore((snapshot) => snapshot.projectState)
   const simulationState = useEditorStore((snapshot) => snapshot.simulationState)
   const viewportState = useEditorStore((snapshot) => snapshot.viewportState)
+  const viewportBackground = viewportState.background
   const selectedNode = graphState.nodeCatalog.find((node) => node.id === graphState.selectedNodeId)
   const [domainDraft, setDomainDraft] = useState<[number, number, number]>(
     simulationState.domainResolution,
@@ -167,6 +168,128 @@ export function InspectorPanel() {
         </div>
       </Panel>
 
+      <Panel title="Canvas Background">
+        <div className="space-y-3 px-3 py-3">
+          <div className="flex items-center gap-2">
+            <label className="flex h-8 flex-1 cursor-pointer items-center justify-center border border-(--fenix-border) bg-(--fenix-row) px-3 text-[10px] font-medium uppercase tracking-[0.18em] text-(--fenix-text) transition-colors hover:border-(--fenix-accent) hover:text-(--fenix-accent-soft)">
+              <span>Upload Photo</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  const input = event.currentTarget
+                  const file = input.files?.[0]
+
+                  if (!file) {
+                    return
+                  }
+
+                  void readFileAsDataUrl(file)
+                    .then((imageDataUrl) => {
+                      dispatch({
+                        type: 'viewport/set-background-image',
+                        imageDataUrl,
+                        imageName: file.name,
+                      })
+                    })
+                    .catch((error: unknown) => {
+                      console.error(error)
+                    })
+                    .finally(() => {
+                      input.value = ''
+                    })
+                }}
+              />
+            </label>
+
+            <button
+              type="button"
+              disabled={!viewportBackground.imageDataUrl}
+              onClick={() => {
+                dispatch({
+                  type: 'viewport/set-background-image',
+                  imageDataUrl: null,
+                  imageName: null,
+                })
+              }}
+              className="h-8 px-3 text-[10px] font-medium uppercase tracking-[0.18em] text-(--fenix-text-muted) transition-colors hover:text-(--fenix-text) disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[9px] uppercase tracking-[0.18em] text-(--fenix-text-muted)">
+              Image
+            </span>
+            <span className="truncate text-right text-xs text-(--fenix-text)">
+              {viewportBackground.imageName ?? 'None loaded'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-[9px] uppercase tracking-[0.2em] text-(--fenix-text-muted)">
+                Offset X
+              </span>
+              <input
+                type="number"
+                step={1}
+                value={viewportBackground.offsetX}
+                onChange={(event) => {
+                  dispatch({
+                    type: 'viewport/set-background-offset',
+                    offsetX: clampViewportOffset(Number(event.target.value)),
+                    offsetY: viewportBackground.offsetY,
+                  })
+                }}
+                className="h-8 w-full border border-(--fenix-border) bg-(--fenix-bg) px-2 text-xs tabular-nums text-(--fenix-text) outline-none focus:border-(--fenix-accent)"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-[9px] uppercase tracking-[0.2em] text-(--fenix-text-muted)">
+                Offset Y
+              </span>
+              <input
+                type="number"
+                step={1}
+                value={viewportBackground.offsetY}
+                onChange={(event) => {
+                  dispatch({
+                    type: 'viewport/set-background-offset',
+                    offsetX: viewportBackground.offsetX,
+                    offsetY: clampViewportOffset(Number(event.target.value)),
+                  })
+                }}
+                className="h-8 w-full border border-(--fenix-border) bg-(--fenix-bg) px-2 text-xs tabular-nums text-(--fenix-text) outline-none focus:border-(--fenix-accent)"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-[9px] uppercase tracking-[0.2em] text-(--fenix-text-muted)">
+                Scale
+              </span>
+              <input
+                type="number"
+                min={0.1}
+                max={5}
+                step={0.05}
+                value={viewportBackground.scale}
+                onChange={(event) => {
+                  dispatch({
+                    type: 'viewport/set-background-scale',
+                    scale: clampViewportScale(Number(event.target.value)),
+                  })
+                }}
+                className="h-8 w-full border border-(--fenix-border) bg-(--fenix-bg) px-2 text-xs tabular-nums text-(--fenix-text) outline-none focus:border-(--fenix-accent)"
+              />
+            </label>
+          </div>
+        </div>
+      </Panel>
+
       {/* Sim profile selection */}
       <Panel title="Sim Profile">
         <div className="flex flex-col gap-px">
@@ -199,4 +322,42 @@ function clampDomainInput(value: number) {
   }
 
   return Math.max(32, Math.min(512, Math.round(value / 8) * 8))
+}
+
+function clampViewportOffset(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+
+  return Math.round(value)
+}
+
+function clampViewportScale(value: number) {
+  if (!Number.isFinite(value)) {
+    return 1
+  }
+
+  return Math.max(0.1, Math.min(5, Math.round(value * 100) / 100))
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.addEventListener('load', () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+
+        return
+      }
+
+      reject(new Error('Image upload returned an unexpected result.'))
+    })
+
+    reader.addEventListener('error', () => {
+      reject(reader.error ?? new Error('Image upload failed.'))
+    })
+
+    reader.readAsDataURL(file)
+  })
 }

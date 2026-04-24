@@ -84,6 +84,47 @@ function reduceEditorSnapshot(
       }
     }
 
+    case 'viewport/set-background-image': {
+      return {
+        ...snapshot,
+        viewportState: {
+          ...snapshot.viewportState,
+          background: {
+            ...snapshot.viewportState.background,
+            imageDataUrl: command.imageDataUrl,
+            imageName: command.imageName,
+          },
+        },
+      }
+    }
+
+    case 'viewport/set-background-offset': {
+      return {
+        ...snapshot,
+        viewportState: {
+          ...snapshot.viewportState,
+          background: {
+            ...snapshot.viewportState.background,
+            offsetX: command.offsetX,
+            offsetY: command.offsetY,
+          },
+        },
+      }
+    }
+
+    case 'viewport/set-background-scale': {
+      return {
+        ...snapshot,
+        viewportState: {
+          ...snapshot.viewportState,
+          background: {
+            ...snapshot.viewportState.background,
+            scale: command.scale,
+          },
+        },
+      }
+    }
+
     case 'simulation/set-profile': {
       return {
         ...snapshot,

@@ -21,6 +21,20 @@ export type EditorCommand =
       overlay: string
     }
   | {
+      type: 'viewport/set-background-image'
+      imageDataUrl: string | null
+      imageName: string | null
+    }
+  | {
+      type: 'viewport/set-background-offset'
+      offsetX: number
+      offsetY: number
+    }
+  | {
+      type: 'viewport/set-background-scale'
+      scale: number
+    }
+  | {
       type: 'simulation/set-profile'
       profile: SimulationProfile
     }
