@@ -43,7 +43,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
   let index = flatten(id);
   let dt = params.deltaTime;
-  let temperatureLift = temperatureField[index] * 3.6;
+  let temperatureLift = temperatureField[index] * params.buoyancy;
   let smokeWeight = densityField[index] * 0.55;
   let normalizedY = (f32(id.y) + 0.5) / f32(volumeInfo.height);
   let shear = sin(f32(id.y) * 0.073 + params.time * 0.9) * 0.35 +

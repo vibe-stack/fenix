@@ -5,5 +5,11 @@ export function createSimulationState(): SimulationState {
   return {
     ...simulationDefaults,
     profile: 'Combustion Authoring Baseline',
+    runtimeParams: {
+      wind: [0.8, -0.3, 0.2],
+      windStrength: 2,
+      buoyancy: 3.6,
+      vorticityStrength: 2.15,
+    },
   }
 }

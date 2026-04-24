@@ -1,7 +1,7 @@
 import type { VolumeDisplayMode } from '../../engine/render/volumetrics/volumeDisplayMode'
 import type { VolumeResolution } from '../../engine/simulation/common/volumeResolution'
 import { useEffect, useRef, useState } from 'react'
-import type { ViewportMountState } from '../../engine/core/types/platform'
+import type { SimulationHandle, ViewportMountState } from '../../engine/core/types/platform'
 import type { RendererBridge } from '../../engine/render/renderer/createRendererBridge'
 
 export function useViewportSurface(
@@ -13,6 +13,7 @@ export function useViewportSurface(
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [mountState, setMountState] = useState<ViewportMountState>('booting')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [simulationHandle, setSimulationHandle] = useState<SimulationHandle | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
@@ -26,6 +27,7 @@ export function useViewportSurface(
 
     setMountState('booting')
     setErrorMessage(null)
+    setSimulationHandle(null)
 
     void rendererBridge
       .createViewportRuntime(displayMode, resolution)
@@ -36,9 +38,16 @@ export function useViewportSurface(
           return
         }
 
-        runtimeCleanup = () => runtime.dispose()
+        runtimeCleanup = () => {
+          runtime.dispose()
+          if (isActive) setSimulationHandle(null)
+        }
 
-        return runtime.mount(container)
+        return runtime.mount(container).then(() => {
+          if (isActive) {
+            setSimulationHandle(runtime.getSimulationHandle())
+          }
+        })
       })
       .then(() => {
         if (isActive) {
@@ -62,5 +71,6 @@ export function useViewportSurface(
     containerRef,
     mountState,
     errorMessage,
+    simulationHandle,
   }
 }

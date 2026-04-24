@@ -144,5 +144,18 @@ function reduceEditorSnapshot(
         },
       }
     }
+
+    case 'simulation/set-runtime-params': {
+      return {
+        ...snapshot,
+        simulationState: {
+          ...snapshot.simulationState,
+          runtimeParams: {
+            ...snapshot.simulationState.runtimeParams,
+            ...command.params,
+          },
+        },
+      }
+    }
   }
 }

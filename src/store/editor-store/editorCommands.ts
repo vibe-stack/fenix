@@ -2,6 +2,7 @@ import type {
   SimulationProfile,
   ViewportShadingMode,
 } from '../../editor/models/workspace'
+import type { SimulationRuntimeParams } from '../../engine/simulation/runtime/combustion-volume-simulation/types'
 
 export type EditorCommand =
   | {
@@ -41,4 +42,8 @@ export type EditorCommand =
   | {
       type: 'simulation/set-domain-resolution'
       resolution: [number, number, number]
+    }
+  | {
+      type: 'simulation/set-runtime-params'
+      params: Partial<SimulationRuntimeParams>
     }

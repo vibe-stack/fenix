@@ -46,7 +46,7 @@ export function createCombustionVolumeSimulation(
   const sparseLayout = createSparseBrickLayout(resolution)
   const simulationParamsBuffer = device.createBuffer({
     label: 'simulation-params',
-    size: 32,
+    size: 48,
     usage: GPU_BUFFER_UNIFORM | GPU_BUFFER_COPY_DST,
   })
   const scalarA = createScalarFieldBuffers(device, 'scalar-a', voxelCount)
@@ -99,7 +99,7 @@ export function createCombustionVolumeSimulation(
     activeBrickFlags,
     activeBrickInfo,
   )
-  const buoyancy = new BuoyancyPass(
+  const buoyancyPass = new BuoyancyPass(
     device,
     simulationParamsBuffer,
     volumeInfo,
@@ -168,8 +168,32 @@ export function createCombustionVolumeSimulation(
   let debugRequested = false
   let simulationStepIndex = 0
   const shouldRunDebugEachFrame = voxelCount < 1_800_000
-  const wind = options.wind ?? [0.18, 0.0, -0.07]
-  const windStrength = options.windStrength ?? 0.74
+  let wind: [number, number, number] = options.wind ? [options.wind[0], options.wind[1], options.wind[2]] : [0.18, 0.0, -0.07]
+  let windStrength = options.windStrength ?? 0.74
+  let buoyancy = 3.6
+  let vorticityStrength = 2.15
+
+  function doReset(atSeconds: number) {
+    currentScalarSet = 0
+    simulationStepIndex = 0
+    lastPressureBuffer = 'a'
+    initialized = false
+    simulationStartSeconds = atSeconds
+    lastElapsedSeconds = atSeconds
+    const enc = device.createCommandEncoder({ label: 'reset-combustion-simulation' })
+    clearScalarSet(enc, clear, scalarA, voxelCount)
+    clearScalarSet(enc, clear, scalarB, voxelCount)
+    clear.clear(enc, velocityCurrent, voxelCount * 4)
+    clear.clear(enc, velocityScratch, voxelCount * 4)
+    clear.clear(enc, vorticity, voxelCount * 4)
+    clear.clear(enc, vorticityMagnitude, voxelCount)
+    clear.clear(enc, confinementForceMagnitude, voxelCount)
+    clear.clear(enc, velocityMagnitude, voxelCount)
+    clear.clear(enc, activeBrickFlagsA, sparseLayout.brickCount)
+    clear.clear(enc, activeBrickFlagsB, sparseLayout.brickCount)
+    pressureSolve.clear(enc)
+    device.queue.submit([enc.finish()])
+  }
 
   return {
     resolution,
@@ -195,6 +219,9 @@ export function createCombustionVolumeSimulation(
           wind[1],
           wind[2],
           windStrength,
+          buoyancy,
+          vorticityStrength,
+          0, 0, // padding
         ]),
       )
 
@@ -212,7 +239,7 @@ export function createCombustionVolumeSimulation(
       )
       clear.clear(encoder, activeBrickFlags[nextScalarSet], sparseLayout.brickCount)
       activeBricks.dispatch(encoder, sparseLayout, nextScalarSet)
-      buoyancy.dispatch(encoder, resolution, nextScalarSet)
+      buoyancyPass.dispatch(encoder, resolution, nextScalarSet)
 
       if (simulationStepIndex % performanceSchedule.vorticityInterval === 0) {
         vorticityPass.dispatch(encoder, resolution)
@@ -264,6 +291,18 @@ export function createCombustionVolumeSimulation(
     setScalarAdvectionMode(mode) {
       scalarAdvectionMode = mode
       performanceSchedule = createSimulationPerformanceSchedule(resolution, scalarAdvectionMode)
+    },
+    getRuntimeParams() {
+      return { wind: [...wind] as [number, number, number], windStrength, buoyancy, vorticityStrength }
+    },
+    setRuntimeParams(params) {
+      if (params.wind !== undefined) wind = [params.wind[0], params.wind[1], params.wind[2]]
+      if (params.windStrength !== undefined) windStrength = params.windStrength
+      if (params.buoyancy !== undefined) buoyancy = params.buoyancy
+      if (params.vorticityStrength !== undefined) vorticityStrength = params.vorticityStrength
+    },
+    reset() {
+      doReset(lastElapsedSeconds)
     },
     dispose() {
       simulationParamsBuffer.destroy()

@@ -3,6 +3,13 @@ import type { VolumeResolution } from '../../common/volumeResolution'
 
 export type ScalarAdvectionMode = 'semi-lagrangian' | 'maccormack'
 
+export interface SimulationRuntimeParams {
+  wind: readonly [number, number, number]
+  windStrength: number
+  buoyancy: number
+  vorticityStrength: number
+}
+
 export interface CombustionVolumeSimulation {
   readonly resolution: VolumeResolution
   step(encoder: GPUCommandEncoder, elapsedSeconds: number, stepSeconds: number): void
@@ -10,6 +17,9 @@ export interface CombustionVolumeSimulation {
   getDebugBuffers(): SimulationDebugBuffers
   getScalarAdvectionMode(): ScalarAdvectionMode
   setScalarAdvectionMode(mode: ScalarAdvectionMode): void
+  getRuntimeParams(): SimulationRuntimeParams
+  setRuntimeParams(params: Partial<SimulationRuntimeParams>): void
+  reset(): void
   dispose(): void
 }
 

@@ -4,9 +4,11 @@ import { createCombustionVolumeSimulation, type CombustionVolumeSimulation } fro
 import type { VolumeResolution } from '../../simulation/common/volumeResolution'
 import { createVolumeRaymarchPass, type VolumeRaymarchPass } from '../passes/createVolumeRaymarchPass'
 import type { VolumeDisplayMode } from '../volumetrics/volumeDisplayMode'
+import type { SimulationHandle } from '../../core/types/platform'
 
 export interface ViewportRuntime {
   mount(container: HTMLElement): Promise<void>
+  getSimulationHandle(): SimulationHandle | null
   dispose(): void
 }
 
@@ -35,6 +37,8 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
   private resizeObserver: ResizeObserver | null = null
   private animationFrameId: number | null = null
   private lastFrameTime = 0
+  private paused = false
+  private simulationHandle: SimulationHandle | null = null
 
   constructor(displayMode: VolumeDisplayMode, resolution: VolumeResolution) {
     this.displayMode = displayMode
@@ -70,6 +74,8 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     this.controls = controls
     this.simulation = simulation
     this.raymarchPass = raymarchPass
+    this.paused = false
+    this.simulationHandle = this.buildHandle(simulation)
 
     this.resizeObserver = new ResizeObserver(() => {
       this.resize()
@@ -79,6 +85,10 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     this.resize()
     this.lastFrameTime = performance.now()
     this.animationFrameId = window.requestAnimationFrame(this.renderFrame)
+  }
+
+  getSimulationHandle(): SimulationHandle | null {
+    return this.simulationHandle
   }
 
   dispose() {
@@ -97,11 +107,34 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     this.raymarchPass = null
     this.simulation?.dispose()
     this.simulation = null
+    this.simulationHandle = null
     this.gpu = null
     this.canvas?.remove()
     this.canvas = null
 
     this.container = null
+  }
+
+  private buildHandle(simulation: CombustionVolumeSimulation): SimulationHandle {
+    return {
+      getPlaybackState: () => (this.paused ? 'paused' : 'playing'),
+      play: () => {
+        if (this.paused) {
+          this.paused = false
+          this.lastFrameTime = performance.now()
+        }
+      },
+      pause: () => {
+        this.paused = true
+      },
+      reset: () => {
+        simulation.reset()
+      },
+      setWindDirection: (x, y, z) => simulation.setRuntimeParams({ wind: [x, y, z] }),
+      setWindStrength: (v) => simulation.setRuntimeParams({ windStrength: v }),
+      setBuoyancy: (v) => simulation.setRuntimeParams({ buoyancy: v }),
+      setVorticityStrength: (v) => simulation.setRuntimeParams({ vorticityStrength: v }),
+    }
   }
 
   private resize() {
@@ -131,7 +164,9 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     const view = this.gpu.context.getCurrentTexture().createView()
     const camera = this.controls.getSnapshot()
 
-    this.simulation.step(encoder, elapsedSeconds, deltaSeconds)
+    if (!this.paused) {
+      this.simulation.step(encoder, elapsedSeconds, deltaSeconds)
+    }
     this.raymarchPass.render(
       encoder,
       view,
@@ -144,7 +179,9 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     )
     this.gpu.device.queue.submit([encoder.finish()])
 
-    this.lastFrameTime = time
+    if (!this.paused) {
+      this.lastFrameTime = time
+    }
     this.animationFrameId = window.requestAnimationFrame(this.renderFrame)
   }
 }

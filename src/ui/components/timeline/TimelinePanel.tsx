@@ -1,47 +1,38 @@
 import { useEditorStore } from '../../hooks/useEditorStore'
+import { useSimulationHandle } from '../../../features/viewport/SimulationHandleContext'
+import { PlaybackControls } from './PlaybackControls'
+import { usePlaybackState } from './usePlaybackState'
 
 export function TimelinePanel() {
-  const simulationState = useEditorStore((snapshot) => snapshot.simulationState)
+  const simulationState = useEditorStore((s) => s.simulationState)
+  const handle = useSimulationHandle()
+  const { isPlaying, frameCount, togglePlayPause, reset } = usePlaybackState(handle)
 
   return (
     <div className="flex h-10 shrink-0 items-center gap-px bg-(--fenix-panel)">
-      {/* Playback controls */}
-      <div className="flex items-center gap-px px-3">
-        {(['⏮', '◀', '■', '▶', '⏭'] as const).map((sym) => (
-          <button
-            key={sym}
-            type="button"
-            className="flex h-7 w-7 items-center justify-center text-[10px] text-(--fenix-text-muted) transition-colors hover:text-(--fenix-text)"
-          >
-            {sym}
-          </button>
-        ))}
-      </div>
+      <PlaybackControls
+        handle={handle}
+        isPlaying={isPlaying}
+        onPlayPause={togglePlayPause}
+        onReset={reset}
+      />
 
       <div className="h-4 w-px bg-(--fenix-bg)" />
 
-      {/* Frame counter */}
       <div className="flex items-center gap-2 px-3">
         <span className="text-[9px] uppercase tracking-[0.24em] text-(--fenix-text-muted)">Frame</span>
-        <span className="tabular-nums text-xs text-(--fenix-text)">0001</span>
+        <span className="w-10 tabular-nums text-xs text-(--fenix-text)">{String(frameCount).padStart(4, '0')}</span>
       </div>
 
       <div className="h-4 w-px bg-(--fenix-bg)" />
 
-      {/* Timeline track — placeholder scrubber area */}
+      {/* Scrubber placeholder */}
       <div className="relative flex flex-1 items-center px-3">
-        <div className="h-0.5 w-full bg-(--fenix-row)">
-          <div className="h-full w-1/12 bg-(--fenix-accent)" />
-        </div>
-        <div
-          className="absolute left-[calc(1/12*100%+12px)] top-1/2 h-3 w-0.5 -translate-y-1/2 bg-(--fenix-accent)"
-          style={{ pointerEvents: 'none' }}
-        />
+        <div className="h-px w-full bg-(--fenix-row)" />
       </div>
 
       <div className="h-4 w-px bg-(--fenix-bg)" />
 
-      {/* Sim cadence */}
       <div className="flex items-center gap-2 px-3">
         <span className="text-[9px] uppercase tracking-[0.24em] text-(--fenix-text-muted)">Rate</span>
         <span className="tabular-nums text-xs text-(--fenix-text)">{simulationState.stepRateHz} Hz</span>
@@ -49,7 +40,6 @@ export function TimelinePanel() {
 
       <div className="h-4 w-px bg-(--fenix-bg)" />
 
-      {/* Domain */}
       <div className="flex items-center gap-2 px-3">
         <span className="text-[9px] uppercase tracking-[0.24em] text-(--fenix-text-muted)">Domain</span>
         <span className="tabular-nums text-xs text-(--fenix-text)">
