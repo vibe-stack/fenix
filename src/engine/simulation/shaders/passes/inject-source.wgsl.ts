@@ -18,6 +18,7 @@ struct ExplosionSource {
   timing: vec4<f32>,
   yields: vec4<f32>,
   impulse: vec4<f32>,
+  lift: vec4<f32>,
   shape: vec4<f32>,
   random: vec4<f32>,
 }
@@ -109,6 +110,13 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
     if (core > 0.0001) {
       let patchScale = max(blastSource.shape.x, 1.0);
+      let liftDirectionBase = blastSource.lift.xyz;
+      let liftDirection = normalize(select(
+        vec3<f32>(0.0, 1.0, 0.0),
+        liftDirectionBase,
+        dot(liftDirectionBase, liftDirectionBase) > 0.0001,
+      ));
+      let liftImpulse = blastSource.lift.w;
       let thermalNoise = valueNoise(normalized * patchScale + vec3<f32>(blastSource.random.x, params.time * 0.8, -blastSource.random.x * 0.37));
       let detailNoise = valueNoise(normalized * patchScale * 2.25 + vec3<f32>(-params.time * 1.3, blastSource.random.x * 0.71, params.time * 0.55));
       let plumeNoisePosition = vec3<f32>(
@@ -137,11 +145,15 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
       let hotClear = smoothstep(0.12, 0.82, hotFlash + heatMask * flashPulse * 0.45);
       let preSmoke = core * preSmokeGate * smokeShell * smokeMask * mix(0.12, 0.64, smokeExpansion);
       let direction = (offset + vec3<f32>(0.0, 0.12, 0.0)) / max(length(offset + vec3<f32>(0.0, 0.12, 0.0)), 0.0001);
-      let horizontalRatio = length(offset.xz) / max(effectiveRadius, 0.001);
-      let updraftCore = exp(-horizontalRatio * horizontalRatio * 18.0) *
-        smoothstep(-0.12, 0.55, offset.y / max(radius, 0.001)) *
+      let plumeAxisOffset = offset - liftDirection * dot(offset, liftDirection);
+      let axisRatio = length(plumeAxisOffset / vec3<f32>(1.0, 0.72, 1.0)) / max(effectiveRadius, 0.001);
+      let liftProgress = dot(offset, liftDirection) / max(radius, 0.001);
+      let liftSkew = clamp(dot(normalize(offset + liftDirection * 0.15), liftDirection) * 0.5 + 0.5, 0.0, 1.0);
+      let updraftCore = exp(-axisRatio * axisRatio * 18.0) *
+        smoothstep(-0.18, 0.68, liftProgress) *
         (1.0 - smoothstep(0.42, 1.0, distanceRatio)) *
         plumeHeatMask *
+        mix(0.72, 1.18, liftSkew) *
         (blastGate * smoothstep(0.18, 0.75, blastAge) * 0.5 + plumeGate * exp(-plumeAge * 3.0));
       let plumeSootMask = smoothstep(0.38, 0.94, 1.0 - plumeHeatMask + plumeDetail * 0.28);
       let sootInCore = updraftCore * plumeSootMask *
@@ -173,12 +185,12 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         blastSource.yields.z * params.deltaTime);
       reaction = clamp01(max(reaction, max(hotFlash, updraftCore * 0.34) * blastSource.yields.w));
       velocity += direction * shock * blastSource.impulse.x * params.deltaTime;
-      velocity += curlKick * (radialPatch * blastSource.impulse.z + crumblePocket * blastSource.impulse.w) * params.deltaTime;
-      velocity += curlKick * updraftCore * (1.0 - plumeHeatMask) * blastSource.impulse.w * params.deltaTime * 0.32;
+      velocity += curlKick * (radialPatch * blastSource.impulse.y + crumblePocket * blastSource.impulse.z) * params.deltaTime;
+      velocity += curlKick * updraftCore * (1.0 - plumeHeatMask) * blastSource.impulse.z * params.deltaTime * 0.32;
       velocity += direction * coolingSmoke * blastSource.impulse.x * params.deltaTime * 0.18;
       velocity += params.wind.xyz * coolingSmoke * params.wind.w * params.deltaTime * 0.9;
-      velocity.y += (core * blastSource.impulse.y * (flashPulse * 0.32 + plumeGate * (1.0 - plumeAge) * 0.36) +
-        updraftCore * blastSource.shape.z * 0.42 + coolingSmoke * blastSource.impulse.y * 0.22) * params.deltaTime;
+      velocity += liftDirection * (core * liftImpulse * (flashPulse * 0.32 + plumeGate * (1.0 - plumeAge) * 0.36) +
+        updraftCore * blastSource.shape.z * 0.42 + coolingSmoke * liftImpulse * 0.22) * params.deltaTime;
     }
   }
 
