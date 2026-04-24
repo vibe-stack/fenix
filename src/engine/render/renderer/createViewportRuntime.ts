@@ -58,8 +58,8 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     const controls = createOrbitCameraController()
     const simulation = createCombustionVolumeSimulation(gpu.device, {
       resolution: this.resolution,
-      wind: [0.5, 0, 0],
-      windStrength: 0,
+      wind: [0.8, -0.3, 0.2],
+      windStrength: 2,
     })
     const raymarchPass = createVolumeRaymarchPass(gpu.device, gpu.format, simulation.resolution)
 

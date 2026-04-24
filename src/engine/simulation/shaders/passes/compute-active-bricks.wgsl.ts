@@ -30,6 +30,7 @@ fn main(@builtin(global_invocation_id) brickId: vec3<u32>) {
   let brickSize = brickInfo.params.x;
   let base = brickId * vec3<u32>(brickSize);
   var activeFlag = 0u;
+  var peakEnergy = 0.0;
 
   let stride = max(brickSize / 4u, 1u);
   for (var z = 0u; z < brickSize; z += stride) {
@@ -39,6 +40,7 @@ fn main(@builtin(global_invocation_id) brickId: vec3<u32>) {
         if (coord.x < volumeInfo.width && coord.y < volumeInfo.height && coord.z < volumeInfo.depth) {
           let fieldIndex = flatten(coord);
           let fieldEnergy = densityField[fieldIndex] + temperatureField[fieldIndex] * 0.7 + reactionField[fieldIndex] * 0.9;
+          peakEnergy = max(peakEnergy, fieldEnergy);
           if (fieldEnergy > 0.012) {
             activeFlag = 1u;
           }
@@ -50,6 +52,7 @@ fn main(@builtin(global_invocation_id) brickId: vec3<u32>) {
   let center = min(base + vec3<u32>(brickSize / 2u), vec3<u32>(volumeInfo.width - 1u, volumeInfo.height - 1u, volumeInfo.depth - 1u));
   let centerIndex = flatten(center);
   let centerEnergy = densityField[centerIndex] + temperatureField[centerIndex] * 0.7 + reactionField[centerIndex] * 0.9;
+  peakEnergy = max(peakEnergy, centerEnergy);
   if (centerEnergy > 0.012) {
     activeFlag = 1u;
   }
@@ -58,9 +61,11 @@ fn main(@builtin(global_invocation_id) brickId: vec3<u32>) {
     return;
   }
 
-  for (var z = -1i; z <= 1i; z += 1i) {
-    for (var y = -1i; y <= 1i; y += 1i) {
-      for (var x = -1i; x <= 1i; x += 1i) {
+  let dilationRadius = select(0i, 1i, peakEnergy > 0.05 || centerEnergy > 0.035);
+
+  for (var z = -dilationRadius; z <= dilationRadius; z += 1i) {
+    for (var y = -dilationRadius; y <= dilationRadius; y += 1i) {
+      for (var x = -dilationRadius; x <= dilationRadius; x += 1i) {
         let neighbor = vec3<u32>(
           u32(clamp(i32(brickId.x) + x, 0i, i32(brickInfo.counts.x) - 1i)),
           u32(clamp(i32(brickId.y) + y, 0i, i32(brickInfo.counts.y) - 1i)),
