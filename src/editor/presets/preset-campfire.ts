@@ -1,37 +1,56 @@
-import { createScalarEmitter, createIgniterEmitter, createLight, type NewFilePreset } from './types'
+import { createScalarEmitter, createVelocityEmitter, createIgniterEmitter, createLight, type NewFilePreset } from './types'
 
 export const campfirePreset: NewFilePreset = {
   id: 'campfire',
   label: 'Campfire',
-  description: 'Sustained low flame with a turbulent thermal column and drifting smoke.',
+  description: 'Small sustained flame, delayed grey smoke, and a weak pulsing thermal draft.',
   emitters: [
-    // Continuous heat and fuel — combustion pass turns these into fire and soot.
-    createScalarEmitter('Flame', {
+    createScalarEmitter('Core Flame', {
       positionX: 0.5, positionY: 0.06, positionZ: 0.5,
       radius: 0.035,
       startTime: 0,
       duration: 9999,
-      densityRate: 0,    // combustion produces the soot, not us
-      heatRate: 6,
-      fuelRate: 8,
+      densityRate: 0.05,
+      heatRate: 4.8,
+      fuelRate: 5.2,
       noiseScale: 12,
-      noiseMix: 0.5,
+      noiseMix: 0.45,
       seed: 607,
     }),
-    // Separate wider smoke emitter — cold, no heat, just density drifting up.
-    createScalarEmitter('Smoke', {
-      positionX: 0.5, positionY: 0.09, positionZ: 0.5,
-      radius: 0.055,
-      startTime: 0.5,
+    createScalarEmitter('Low Smoke Bed', {
+      positionX: 0.492, positionY: 0.088, positionZ: 0.506,
+      radius: 0.052,
+      startTime: 0.8,
       duration: 9999,
-      densityRate: 1.2,
-      heatRate: 0,
+      densityRate: 0.9,
+      heatRate: 0.08,
       fuelRate: 0,
-      noiseScale: 6,
+      noiseScale: 7,
       noiseMix: 0.7,
       seed: 613,
     }),
-    // Spark to ignite the fuel at t=0.
+    createVelocityEmitter('Thermal Lift', {
+      positionX: 0.5, positionY: 0.08, positionZ: 0.5,
+      radius: 0.06,
+      startTime: 0.15,
+      duration: 9999,
+      mode: 'directional',
+      speed: 5.5,
+      directionX: 0.04, directionY: 1, directionZ: -0.03,
+      falloff: 0.85,
+      seed: 617,
+    }),
+    createVelocityEmitter('Flame Flicker', {
+      positionX: 0.5, positionY: 0.07, positionZ: 0.5,
+      radius: 0.045,
+      startTime: 0.3,
+      duration: 9999,
+      mode: 'turbulent',
+      speed: 2.8,
+      directionX: 0, directionY: 1, directionZ: 0,
+      falloff: 0.75,
+      seed: 618,
+    }),
     createIgniterEmitter('Ignition', {
       positionX: 0.5, positionY: 0.065, positionZ: 0.5,
       radius: 0.04,
@@ -51,12 +70,12 @@ export const campfirePreset: NewFilePreset = {
     }),
   ],
   runtimeParams: {
-    wind: [0.015, 0, -0.01],
-    windStrength: 0.03,
+    wind: [0.018, 0, -0.012],
+    windStrength: 0.045,
     gravity: [0, -1, 0],
     gravityStrength: 0.45,
-    buoyancy: 2.6,
-    vorticityStrength: 0.95,
+    buoyancy: 2.35,
+    vorticityStrength: 1.35,
     worldSize: 5,
   },
   renderOutput: {

@@ -78,36 +78,38 @@ export function NewFilePopover() {
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5 p-2">
-              {newFilePresets.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => applyPreset(preset.id)}
-                  className="group flex min-h-20 flex-col justify-between p-3 text-left transition-colors"
-                  style={{
-                    background: 'var(--fenix-row)',
-                    border: '1px solid rgba(255,255,255,0.04)',
-                  }}
-                  onMouseEnter={(e) => {
-                    const el = e.currentTarget
-                    el.style.background = 'var(--fenix-active)'
-                    el.style.borderColor = 'rgba(255,122,61,0.3)'
-                  }}
-                  onMouseLeave={(e) => {
-                    const el = e.currentTarget
-                    el.style.background = 'var(--fenix-row)'
-                    el.style.borderColor = 'rgba(255,255,255,0.04)'
-                  }}
-                >
-                  <span className="text-[10px] tracking-[0.08em] text-(--fenix-text) group-hover:text-(--fenix-accent-soft)">
-                    {preset.label}
-                  </span>
-                  <span className="mt-2 text-[10px] leading-4 text-(--fenix-text-muted)">
-                    {preset.description}
-                  </span>
-                </button>
-              ))}
+            <div className="max-h-[min(70vh,640px)] overflow-y-auto p-2">
+              <div className="grid grid-cols-2 gap-1.5">
+                {newFilePresets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => applyPreset(preset.id)}
+                    className="group flex min-h-20 flex-col justify-between p-3 text-left transition-colors"
+                    style={{
+                      background: 'var(--fenix-row)',
+                      border: '1px solid rgba(255,255,255,0.04)',
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget
+                      el.style.background = 'var(--fenix-active)'
+                      el.style.borderColor = 'rgba(255,122,61,0.3)'
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget
+                      el.style.background = 'var(--fenix-row)'
+                      el.style.borderColor = 'rgba(255,255,255,0.04)'
+                    }}
+                  >
+                    <span className="text-[10px] tracking-[0.08em] text-(--fenix-text) group-hover:text-(--fenix-accent-soft)">
+                      {preset.label}
+                    </span>
+                    <span className="mt-2 text-[10px] leading-4 text-(--fenix-text-muted)">
+                      {preset.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="px-3 py-2 text-[10px] text-(--fenix-text-muted)" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
