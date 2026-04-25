@@ -1,48 +1,31 @@
-import { useEditorStore } from '../../hooks/useEditorStore'
+import { useSnapshot } from 'valtio'
+import { nodeStore } from '../../../store/node-store/nodeStore'
 import { SimulationParamsSection } from './SimulationParamsSection'
 import { DomainSection } from './DomainSection'
 import { ViewportSection } from './ViewportSection'
-import { Panel } from '../panels/Panel'
-import { StatRow } from '../common/StatRow'
+import { EmitterNodeInspector } from './nodes/EmitterNodeInspector'
+import { CombustionNodeInspector } from './nodes/CombustionNodeInspector'
+import { AdvectionNodeInspector } from './nodes/AdvectionNodeInspector'
+import { RenderOutputNodeInspector } from './nodes/RenderOutputNodeInspector'
 
 export function InspectorPanel() {
-  const graphState = useEditorStore((s) => s.graphState)
-  const selectedNode = graphState.nodeCatalog.find((n) => n.id === graphState.selectedNodeId)
+  const snap = useSnapshot(nodeStore)
 
   return (
     <div>
-      {selectedNode ? (
-        <NodeInspector nodeId={selectedNode.id} label={selectedNode.label} category={selectedNode.category} />
-      ) : (
-        <GlobalInspector />
-      )}
+      <NodeInspector selectedId={snap.selectedId} />
+      <SimulationParamsSection />
+      <DomainSection />
+      <ViewportSection />
     </div>
   )
 }
 
-function GlobalInspector() {
-  return (
-    <>
-      <SimulationParamsSection />
-      <DomainSection />
-      <ViewportSection />
-    </>
-  )
-}
-
-interface NodeInspectorProps {
-  nodeId: string
-  label: string
-  category: string
-}
-
-function NodeInspector({ nodeId: _nodeId, label, category }: NodeInspectorProps) {
-  return (
-    <Panel title={label}>
-      <StatRow label="Category" value={category} />
-      <div className="px-3 py-4 text-[10px] text-(--fenix-text-muted)">
-        No editable properties yet. Select parameters will appear here as node types are implemented.
-      </div>
-    </Panel>
-  )
+function NodeInspector({ selectedId }: { selectedId: string | null }) {
+  if (!selectedId) return null
+  if (selectedId === 'combustion') return <CombustionNodeInspector />
+  if (selectedId === 'advection') return <AdvectionNodeInspector />
+  if (selectedId === 'render-output') return <RenderOutputNodeInspector />
+  if (selectedId.startsWith('emitter-')) return <EmitterNodeInspector id={selectedId} />
+  return null
 }

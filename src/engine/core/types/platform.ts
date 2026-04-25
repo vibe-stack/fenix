@@ -1,3 +1,5 @@
+import type { ExplosionSource } from '../../simulation/runtime/passes/explosionSources'
+
 export type RuntimeBackend = 'webgpu' | 'cpu-fallback'
 export type RuntimeSupportState = 'checking' | 'ready' | 'fallback'
 
@@ -22,4 +24,6 @@ export interface SimulationHandle {
   setWindStrength(v: number): void
   setBuoyancy(v: number): void
   setVorticityStrength(v: number): void
+  updateSources(sources: readonly ExplosionSource[]): void
+  setRenderParams(params: { stepCount?: number; lightDirX?: number; lightDirY?: number; lightDirZ?: number; scatteringForward?: number; scatteringBack?: number }): void
 }

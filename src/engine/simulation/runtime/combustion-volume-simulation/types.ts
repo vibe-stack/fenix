@@ -10,6 +10,8 @@ export interface SimulationRuntimeParams {
   vorticityStrength: number
 }
 
+import type { ExplosionSource } from '../passes/explosionSources'
+
 export interface CombustionVolumeSimulation {
   readonly resolution: VolumeResolution
   step(encoder: GPUCommandEncoder, elapsedSeconds: number, stepSeconds: number): void
@@ -19,6 +21,7 @@ export interface CombustionVolumeSimulation {
   setScalarAdvectionMode(mode: ScalarAdvectionMode): void
   getRuntimeParams(): SimulationRuntimeParams
   setRuntimeParams(params: Partial<SimulationRuntimeParams>): void
+  updateSources(sources: readonly ExplosionSource[]): void
   reset(): void
   dispose(): void
 }

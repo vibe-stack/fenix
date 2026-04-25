@@ -24,6 +24,7 @@ import { PressureSolvePass } from './passes/PressureSolvePass'
 import { ProjectionPass } from './passes/ProjectionPass'
 import { ScalarAdvectionPass } from './passes/ScalarAdvectionPass'
 import { SourceInjectionPass } from './passes/SourceInjectionPass'
+import { cinematicExplosionSources } from './passes/explosionSources'
 import { VelocityAdvectionPass } from './passes/VelocityAdvectionPass'
 import { VorticityConfinementPass } from './passes/VorticityConfinementPass'
 import { VorticityPass } from './passes/VorticityPass'
@@ -82,6 +83,7 @@ export function createCombustionVolumeSimulation(
     volumeInfo,
     scalarFields,
     velocityCurrent,
+    cinematicExplosionSources,
   )
   const velocityAdvection = new VelocityAdvectionPass(
     device,
@@ -300,6 +302,9 @@ export function createCombustionVolumeSimulation(
       if (params.windStrength !== undefined) windStrength = params.windStrength
       if (params.buoyancy !== undefined) buoyancy = params.buoyancy
       if (params.vorticityStrength !== undefined) vorticityStrength = params.vorticityStrength
+    },
+    updateSources(sources) {
+      sourceInjection.updateSources(sources)
     },
     reset() {
       doReset(lastElapsedSeconds)

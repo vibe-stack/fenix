@@ -3,6 +3,15 @@ import type { CombustionVolumeRenderBuffers } from '../../simulation/common/comb
 import type { VolumeResolution } from '../../simulation/common/volumeResolution'
 import type { VolumeDisplayMode } from '../volumetrics/volumeDisplayMode'
 
+export interface RaymarchRenderParams {
+  stepCount?: number
+  lightDirX?: number
+  lightDirY?: number
+  lightDirZ?: number
+  scatteringForward?: number
+  scatteringBack?: number
+}
+
 export interface VolumeRaymarchPass {
   render(
     encoder: GPUCommandEncoder,
@@ -14,12 +23,13 @@ export interface VolumeRaymarchPass {
     renderHeight: number,
     elapsedSeconds: number,
   ): void
+  setRenderParams(params: RaymarchRenderParams): void
   dispose(): void
 }
 
 const GPU_BUFFER_UNIFORM = 0x0040
 const GPU_BUFFER_COPY_DST = 0x0008
-const CAMERA_DATA_FLOATS = 36
+const CAMERA_DATA_FLOATS = 44
 
 export function createVolumeRaymarchPass(
   device: GPUDevice,
@@ -35,7 +45,13 @@ export function createVolumeRaymarchPass(
   }
   const volumeCenterY = volumeHalfExtents.y - 0.25
   const voxelCount = resolution.width * resolution.height * resolution.depth
-  const stepCount = voxelCount >= 4_000_000 ? 200 : voxelCount >= 1_800_000 ? 400 : 180
+  const defaultStepCount = voxelCount >= 4_000_000 ? 200 : voxelCount >= 1_800_000 ? 400 : 180
+  let stepCount = defaultStepCount
+  let lightDirX = -0.34
+  let lightDirY = 0.88
+  let lightDirZ = 0.31
+  let scatteringForward = 0.32
+  let scatteringBack = -0.18
   const cameraBuffer = device.createBuffer({
     label: 'volume-camera-buffer',
     size: Float32Array.BYTES_PER_ELEMENT * CAMERA_DATA_FLOATS,
@@ -175,6 +191,16 @@ export function createVolumeRaymarchPass(
       cameraData[33] = camera.target.y
       cameraData[34] = camera.target.z
       cameraData[35] = 0
+      // lightDir vec4
+      cameraData[36] = lightDirX
+      cameraData[37] = lightDirY
+      cameraData[38] = lightDirZ
+      cameraData[39] = 0
+      // scatter vec4
+      cameraData[40] = scatteringForward
+      cameraData[41] = scatteringBack
+      cameraData[42] = 0
+      cameraData[43] = 0
 
       device.queue.writeBuffer(cameraBuffer, 0, cameraData)
 
@@ -195,6 +221,14 @@ export function createVolumeRaymarchPass(
       pass.draw(3)
       pass.end()
     },
+    setRenderParams(params) {
+      if (params.stepCount !== undefined) stepCount = params.stepCount
+      if (params.lightDirX !== undefined) lightDirX = params.lightDirX
+      if (params.lightDirY !== undefined) lightDirY = params.lightDirY
+      if (params.lightDirZ !== undefined) lightDirZ = params.lightDirZ
+      if (params.scatteringForward !== undefined) scatteringForward = params.scatteringForward
+      if (params.scatteringBack !== undefined) scatteringBack = params.scatteringBack
+    },
     dispose() {
       cameraBuffer.destroy()
       resolutionBuffer.destroy()
@@ -214,6 +248,8 @@ function createVolumeRaymarchShader() {
       renderInfo: vec4<f32>,
       renderMode: vec4<f32>,
       focalPoint: vec4<f32>,
+      lightDir: vec4<f32>,      // xyz = direction, w = unused
+      scatter: vec4<f32>,       // x = forwardG, y = backG, z/w unused
     }
 
     struct ResolutionData {
@@ -577,11 +613,11 @@ function createVolumeRaymarchShader() {
       let invExtent = 1.0 / (camera.volumeHalfExtents.xyz * 2.0);
       let sampleDimensions = sampleBounds();
       let sampleRayDirection = rayDirection * invExtent * sampleDimensions;
-      let lightDirection = normalize(vec3<f32>(-0.34, 0.88, 0.31));
+      let lightDirection = normalize(camera.lightDir.xyz);
       let sampleLightStep = lightDirection * sampleDimensions * 0.036;
       let lightViewCos = clamp(dot(lightDirection, -rayDirection), -1.0, 1.0);
-      let forwardScatter = phaseHG(lightViewCos, 0.32) * 18.0;
-      let backwardScatter = phaseHG(lightViewCos, -0.18) * 8.0;
+      let forwardScatter = phaseHG(lightViewCos, camera.scatter.x) * 18.0;
+      let backwardScatter = phaseHG(lightViewCos, camera.scatter.y) * 8.0;
       var positionRay = camera.position.xyz + rayDirection * bounds.x;
       var travelled = 0.0;
       var accumulatedColor = vec3<f32>(0.0);

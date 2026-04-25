@@ -6,6 +6,8 @@ import type { VolumeResolution } from '../../../engine/simulation/common/volumeR
 import type { SimulationHandle } from '../../../engine/core/types/platform'
 import { useViewportSurface } from '../../../features/viewport/useViewportSurface'
 import { useSimulationBridge } from '../../../features/viewport/useSimulationBridge'
+import { useSourceBridge } from '../../../features/viewport/useSourceBridge'
+import { useRenderOutputBridge } from '../../../features/viewport/useRenderOutputBridge'
 import { useEditorStore } from '../../hooks/useEditorStore'
 
 interface ViewportSurfaceProps {
@@ -34,6 +36,8 @@ export function ViewportSurface({
   )
 
   useSimulationBridge(simulationHandle, runtimeParams)
+  useSourceBridge(simulationHandle)
+  useRenderOutputBridge(simulationHandle)
 
   useEffect(() => {
     onHandleChange(simulationHandle)
