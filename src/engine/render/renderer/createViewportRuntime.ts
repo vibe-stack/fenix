@@ -1,14 +1,17 @@
+import Stats from 'stats-gl'
 import { createRawWebGPUContext, type RawWebGPUContext } from '../../gpu/context/createRawWebGPUContext'
 import { createOrbitCameraController, type OrbitCameraController } from '../../scene/camera/createOrbitCameraController'
 import { createCombustionVolumeSimulation, type CombustionVolumeSimulation } from '../../simulation/runtime/createCombustionVolumeSimulation'
 import type { VolumeResolution } from '../../simulation/common/volumeResolution'
 import { createVolumeRaymarchPass, type VolumeRaymarchPass } from '../passes/createVolumeRaymarchPass'
+import { createViewportOverlayPass, type ViewportOverlayPass } from '../passes/createViewportOverlayPass'
 import type { VolumeDisplayMode } from '../volumetrics/volumeDisplayMode'
 import type { SimulationHandle } from '../../core/types/platform'
 
 export interface ViewportRuntime {
   mount(container: HTMLElement): Promise<void>
   getSimulationHandle(): SimulationHandle | null
+  setViewportOverlays(overlays: readonly string[]): void
   dispose(): void
 }
 
@@ -34,11 +37,15 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
   private gpu: RawWebGPUContext | null = null
   private simulation: CombustionVolumeSimulation | null = null
   private raymarchPass: VolumeRaymarchPass | null = null
+  private overlayPass: ViewportOverlayPass | null = null
   private resizeObserver: ResizeObserver | null = null
   private animationFrameId: number | null = null
   private lastFrameTime = 0
   private paused = false
   private simulationHandle: SimulationHandle | null = null
+  private viewportOverlays: readonly string[] = []
+  private stats: Stats | null = null
+  private statsInitPromise: Promise<void> | null = null
 
   constructor(displayMode: VolumeDisplayMode, resolution: VolumeResolution) {
     this.displayMode = displayMode
@@ -68,6 +75,7 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
       gravityStrength: 0.45,
     })
     const raymarchPass = createVolumeRaymarchPass(gpu.device, gpu.format, simulation.resolution)
+    const overlayPass = createViewportOverlayPass(gpu.device, gpu.format, simulation.resolution)
 
     controls.attach(canvas)
 
@@ -76,6 +84,7 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     this.controls = controls
     this.simulation = simulation
     this.raymarchPass = raymarchPass
+    this.overlayPass = overlayPass
     this.paused = true
     this.simulationHandle = this.buildHandle(simulation)
 
@@ -96,6 +105,18 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     return this.simulationHandle
   }
 
+  setViewportOverlays(overlays: readonly string[]) {
+    this.viewportOverlays = overlays
+
+    if (overlays.includes('stats')) {
+      void this.ensureStats()
+    } else {
+      this.disposeStats()
+    }
+
+    this.scheduleFrame()
+  }
+
   dispose() {
     if (this.animationFrameId !== null) {
       window.cancelAnimationFrame(this.animationFrameId)
@@ -108,8 +129,11 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     this.controls?.dispose()
     this.controls = null
 
+    this.disposeStats()
     this.raymarchPass?.dispose()
     this.raymarchPass = null
+    this.overlayPass?.dispose()
+    this.overlayPass = null
     this.simulation?.dispose()
     this.simulation = null
     this.simulationHandle = null
@@ -157,7 +181,7 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
       setRenderParams: (params) => this.raymarchPass?.setRenderParams(params),
       getCanvas: () => this.canvas,
       renderOffscreenFrame: (elapsedSeconds, deltaSeconds) => {
-        if (!this.gpu || !this.simulation || !this.raymarchPass || !this.controls || !this.canvas) {
+        if (!this.gpu || !this.simulation || !this.raymarchPass || !this.overlayPass || !this.controls || !this.canvas) {
           return
         }
         const encoder = this.gpu.device.createCommandEncoder({ label: 'export-frame' })
@@ -174,9 +198,63 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
           this.canvas.height,
           elapsedSeconds,
         )
+        this.overlayPass.render(
+          encoder,
+          view,
+          camera,
+          this.canvas.width,
+          this.canvas.height,
+          this.viewportOverlays,
+        )
         this.gpu.device.queue.submit([encoder.finish()])
       },
     }
+  }
+
+  private ensureStats() {
+    if (this.stats || this.statsInitPromise || !this.gpu || !this.container) {
+      return this.statsInitPromise ?? Promise.resolve()
+    }
+
+    const stats = new Stats({
+      trackGPU: true,
+      trackFPS: true,
+      precision: 2,
+      horizontal: true,
+      logsPerSecond: 8,
+      graphsPerSecond: 30,
+    })
+
+    stats.dom.style.position = 'absolute'
+    stats.dom.style.left = '12px'
+    stats.dom.style.top = '12px'
+    stats.dom.style.zIndex = '20'
+    stats.dom.style.opacity = '0.92'
+    stats.dom.style.pointerEvents = 'auto'
+    this.container.appendChild(stats.dom)
+    this.stats = stats
+    this.statsInitPromise = stats
+      .init(this.gpu.device)
+      .catch((error: unknown) => {
+        console.warn('stats-gl failed to initialize WebGPU timing.', error)
+      })
+      .finally(() => {
+        this.statsInitPromise = null
+      })
+
+    return this.statsInitPromise
+  }
+
+  private disposeStats() {
+    this.statsInitPromise = null
+
+    if (!this.stats) {
+      return
+    }
+
+    this.stats.dom.remove()
+    this.stats.dispose()
+    this.stats = null
   }
 
   private resize() {
@@ -196,7 +274,7 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
   private readonly renderFrame = (time: number) => {
     this.animationFrameId = null
 
-    if (!this.gpu || !this.simulation || !this.raymarchPass || !this.controls) {
+    if (!this.gpu || !this.simulation || !this.raymarchPass || !this.overlayPass || !this.controls) {
       return
     }
 
@@ -205,7 +283,9 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     const encoder = this.gpu.device.createCommandEncoder({ label: 'raw-webgpu-volume-frame' })
     const view = this.gpu.context.getCurrentTexture().createView()
     const camera = this.controls.getSnapshot()
+    const stats = this.stats
 
+    stats?.begin()
     if (!this.paused) {
       this.simulation.step(encoder, elapsedSeconds, deltaSeconds)
       this.lastFrameTime = time
@@ -220,8 +300,19 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
       this.canvas?.width ?? 1,
       this.canvas?.height ?? 1,
       elapsedSeconds,
+      stats?.getTimestampWrites(),
     )
+    this.overlayPass.render(
+      encoder,
+      view,
+      camera,
+      this.canvas?.width ?? 1,
+      this.canvas?.height ?? 1,
+      this.viewportOverlays,
+    )
+    stats?.end(encoder)
     this.gpu.device.queue.submit([encoder.finish()])
+    stats?.update()
 
     // Only schedule the next frame when playing — paused draws one frame then stops
     if (!this.paused) {

@@ -28,6 +28,10 @@ export async function createRawWebGPUContext(
   }
 
   const supportedStorageBuffers = adapter.limits.maxStorageBuffersPerShaderStage
+  const timestampQueryFeature = 'timestamp-query' as GPUFeatureName
+  const optionalFeatures: GPUFeatureName[] = adapter.features.has(timestampQueryFeature)
+    ? [timestampQueryFeature]
+    : []
 
   if (supportedStorageBuffers < REQUIRED_STORAGE_BUFFERS_PER_STAGE) {
     throw new Error(
@@ -36,6 +40,7 @@ export async function createRawWebGPUContext(
   }
 
   const device = await adapter.requestDevice({
+    requiredFeatures: optionalFeatures,
     requiredLimits: {
       maxStorageBuffersPerShaderStage: REQUIRED_STORAGE_BUFFERS_PER_STAGE,
     },

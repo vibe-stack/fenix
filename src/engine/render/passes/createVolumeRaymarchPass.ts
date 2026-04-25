@@ -3,6 +3,7 @@ import type { CombustionVolumeRenderBuffers } from '../../simulation/common/comb
 import type { VolumeResolution } from '../../simulation/common/volumeResolution'
 import { MAX_RENDER_LIGHTS, type RenderLight } from '../lighting/renderLight'
 import type { VolumeDisplayMode } from '../volumetrics/volumeDisplayMode'
+import { getVolumeWorldBounds } from '../volumetrics/volumeWorldBounds'
 
 export interface RaymarchRenderParams {
   stepCount?: number
@@ -21,6 +22,7 @@ export interface VolumeRaymarchPass {
     renderWidth: number,
     renderHeight: number,
     elapsedSeconds: number,
+    timestampWrites?: GPURenderPassTimestampWrites,
   ): void
   setRenderParams(params: RaymarchRenderParams): void
   dispose(): void
@@ -78,14 +80,9 @@ export function createVolumeRaymarchPass(
   format: GPUTextureFormat,
   resolution: VolumeResolution,
 ): VolumeRaymarchPass {
-  const volumeScale = 13.5
-  const maxHorizontalResolution = Math.max(resolution.width, resolution.depth)
-  const volumeHalfExtents = {
-    x: 2.05 * volumeScale * (resolution.width / maxHorizontalResolution),
-    y: 2.05 * volumeScale * (resolution.height / maxHorizontalResolution),
-    z: 2.05 * volumeScale * (resolution.depth / maxHorizontalResolution),
-  }
-  const volumeCenterY = volumeHalfExtents.y - 0.25
+  const volumeBounds = getVolumeWorldBounds(resolution)
+  const volumeHalfExtents = volumeBounds.halfExtents
+  const volumeCenterY = volumeBounds.center.y
   const voxelCount = resolution.width * resolution.height * resolution.depth
   const maxAxisResolution = Math.max(resolution.width, resolution.height, resolution.depth)
   const defaultStepCount = clamp(Math.round(maxAxisResolution * 1.5), 180, voxelCount >= 4_000_000 ? 720 : 560)
@@ -192,6 +189,7 @@ export function createVolumeRaymarchPass(
       renderWidth,
       renderHeight,
       elapsedSeconds,
+      timestampWrites,
     ) {
       const displayModeValue = displayMode === 'density' ? 1 : displayMode === 'fuel' ? 2 : 0
 
@@ -275,6 +273,7 @@ export function createVolumeRaymarchPass(
             storeOp: 'store',
           },
         ],
+        timestampWrites,
       })
 
       pass.setPipeline(pipeline)
