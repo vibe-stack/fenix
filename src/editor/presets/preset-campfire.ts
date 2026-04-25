@@ -53,6 +53,8 @@ export const campfirePreset: NewFilePreset = {
   runtimeParams: {
     wind: [0.015, 0, -0.01],
     windStrength: 0.03,
+    gravity: [0, -1, 0],
+    gravityStrength: 0.45,
     buoyancy: 2.6,
     vorticityStrength: 0.95,
     worldSize: 5,

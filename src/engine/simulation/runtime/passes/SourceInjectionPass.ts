@@ -7,7 +7,7 @@ import { GPU_BUFFER_COPY_DST, GPU_BUFFER_STORAGE } from '../combustion-volume-si
 import type { ScalarFieldBuffers } from '../combustion-volume-simulation/types'
 import { createComputeResources } from '../shared/createComputeResources'
 import { dispatchVolume } from '../shared/createVolumeDispatch'
-import { packEmitterSources, FLOATS_PER_EMITTER } from '../../emitters/packEmitterSources'
+import { packEmitterSources } from '../../emitters/packEmitterSources'
 import type { EmitterSource } from '../../emitters/emitterSource'
 
 const MIN_BUFFER_BYTES = 128

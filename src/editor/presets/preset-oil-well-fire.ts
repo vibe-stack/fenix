@@ -65,6 +65,8 @@ export const oilWellFirePreset: NewFilePreset = {
   runtimeParams: {
     wind: [0.08, 0, -0.035],
     windStrength: 0.55,
+    gravity: [0, -1, 0],
+    gravityStrength: 0.45,
     buoyancy: 5.0,
     vorticityStrength: 2.6,
     worldSize: 30,

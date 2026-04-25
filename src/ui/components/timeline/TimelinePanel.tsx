@@ -3,13 +3,17 @@ import { useSimulationHandle } from '../../../features/viewport/SimulationHandle
 import { PlaybackControls } from './PlaybackControls'
 import { usePlaybackState } from './usePlaybackState'
 
-export function TimelinePanel() {
+interface TimelinePanelProps {
+  height?: number
+}
+
+export function TimelinePanel({ height = 40 }: TimelinePanelProps) {
   const simulationState = useEditorStore((s) => s.simulationState)
   const handle = useSimulationHandle()
   const { isPlaying, frameCount, togglePlayPause, reset } = usePlaybackState(handle)
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-px bg-(--fenix-panel)">
+    <div className="flex shrink-0 items-center gap-px overflow-hidden bg-(--fenix-panel)" style={{ height }}>
       <PlaybackControls
         handle={handle}
         isPlaying={isPlaying}

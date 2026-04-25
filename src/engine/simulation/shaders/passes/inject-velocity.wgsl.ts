@@ -74,7 +74,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
       let d = src.direction.xyz;
       dir = select(vec3<f32>(0.0, 1.0, 0.0), normalize(d), dot(d, d) > 0.0001);
     } else {
-      dir = turbulentDir(pos, src.meta.y);
+      dir = turbulentDir(pos, src._meta.y);
     }
 
     vel += dir * speed * weight * params.deltaTime;

@@ -1,5 +1,6 @@
 import type { NodeProps } from '@xyflow/react'
 import { useSnapshot } from 'valtio'
+import type { EmitterNodeProps } from '../../../../engine/graph/schema/nodeProps'
 import { nodeStore } from '../../../../store/node-store/nodeStore'
 import { NodeShell } from './NodeShell'
 
@@ -24,13 +25,38 @@ export function EmitterNode({ id, data, selected }: NodeProps) {
     >
       {emitter && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <PropRow label="radius" value={emitter.props.radius.toFixed(2)} />
-          <PropRow label="heat" value={emitter.props.heatYield.toFixed(2)} />
-          <PropRow label="fuel" value={emitter.props.fuelYield.toFixed(2)} />
+          {emitterSummaryRows(emitter.props).map((row) => (
+            <PropRow key={row.label} label={row.label} value={row.value} />
+          ))}
         </div>
       )}
     </NodeShell>
   )
+}
+
+function emitterSummaryRows(props: EmitterNodeProps): { label: string; value: string }[] {
+  const rows = [{ label: 'radius', value: props.radius.toFixed(2) }]
+
+  if (props.kind === 'scalar') {
+    rows.push(
+      { label: 'density', value: props.densityRate.toFixed(1) },
+      { label: 'heat', value: props.heatRate.toFixed(1) },
+      { label: 'fuel', value: props.fuelRate.toFixed(1) },
+    )
+    return rows
+  }
+
+  if (props.kind === 'velocity') {
+    rows.push(
+      { label: 'mode', value: props.mode },
+      { label: 'speed', value: props.speed.toFixed(0) },
+      { label: 'falloff', value: props.falloff.toFixed(2) },
+    )
+    return rows
+  }
+
+  rows.push({ label: 'intensity', value: props.intensity.toFixed(2) })
+  return rows
 }
 
 function PropRow({ label, value }: { label: string; value: string }) {

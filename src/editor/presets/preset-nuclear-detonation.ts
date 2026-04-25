@@ -76,6 +76,8 @@ export const nuclearDetonationPreset: NewFilePreset = {
   runtimeParams: {
     wind: [0.02, 0, -0.01],
     windStrength: 0.08,
+    gravity: [0, -1, 0],
+    gravityStrength: 0.45,
     buoyancy: 8.0,
     vorticityStrength: 6.0,
     worldSize: 500,

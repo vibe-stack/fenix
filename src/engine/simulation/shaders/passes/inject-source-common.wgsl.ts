@@ -8,7 +8,7 @@ struct EmitterSource {
   direction:      vec4<f32>, // xyz=direction, w=0
   noise:          vec4<f32>, // x=noiseScale, y=noiseMix, z=intensity, w=0
   _pad:           vec4<f32>,
-  meta:           vec4<f32>, // x=kind(0/1/2), y=seed, zw=0
+  _meta:           vec4<f32>, // x=kind(0/1/2), y=seed, zw=0
 }
 
 @group(0) @binding(2) var<storage, read> emitterSources: array<EmitterSource>;

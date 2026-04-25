@@ -43,6 +43,27 @@ export function useGraphNodes(): { nodes: Node[]; edges: Edge[] } {
         data: {},
       },
       {
+        id: 'wind',
+        type: 'wind',
+        position: graphSnap.nodePositions['wind'] ?? { x: 340, y: 56 },
+        selected: snap.selectedId === 'wind',
+        data: {},
+      },
+      {
+        id: 'vorticity',
+        type: 'vorticity',
+        position: graphSnap.nodePositions['vorticity'] ?? { x: 460, y: 56 },
+        selected: snap.selectedId === 'vorticity',
+        data: {},
+      },
+      {
+        id: 'gravity',
+        type: 'gravity',
+        position: graphSnap.nodePositions['gravity'] ?? { x: 580, y: 56 },
+        selected: snap.selectedId === 'gravity',
+        data: {},
+      },
+      {
         id: 'render-output',
         type: 'render-output',
         position: graphSnap.nodePositions['render-output'] ?? { x: 820, y: 200 },

@@ -1,7 +1,10 @@
 import type { GraphNodeDefinition } from '../../engine/graph/schema/nodeTypes'
 import type { VolumeDisplayMode } from '../../engine/render/volumetrics/volumeDisplayMode'
 import type { SimulationDefaults } from '../../engine/simulation/config/simulationDefaults'
-import type { SimulationRuntimeParams } from '../../engine/simulation/runtime/combustion-volume-simulation/types'
+import type {
+  SimulationQualitySettings,
+  SimulationRuntimeParams,
+} from '../../engine/simulation/runtime/combustion-volume-simulation/types'
 
 export interface AppState {
   productName: string
@@ -47,6 +50,7 @@ export interface ViewportState {
 export interface SimulationState extends SimulationDefaults {
   profile: SimulationProfile
   runtimeParams: SimulationRuntimeParams
+  qualitySettings: SimulationQualitySettings
 }
 
 export interface EditorSnapshot {

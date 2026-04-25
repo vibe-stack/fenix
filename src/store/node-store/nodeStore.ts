@@ -11,10 +11,14 @@ import type {
   IgniterEmitterNodeProps,
   CombustionNodeProps,
   AdvectionNodeProps,
+  WindNodeProps,
+  GravityNodeProps,
+  VorticityNodeProps,
   LightNodeProps,
   RenderOutputNodeProps,
 } from '../../engine/graph/schema/nodeProps'
 import type { EmitterSource } from '../../engine/simulation/emitters/emitterSource'
+import type { SimulationRuntimeParams } from '../../engine/simulation/runtime/combustion-volume-simulation/types'
 
 export interface EmitterInstance {
   id: string
@@ -34,6 +38,9 @@ export interface NodeStoreState {
   lights: LightInstance[]
   combustion: CombustionNodeProps
   advection: AdvectionNodeProps
+  wind: WindNodeProps
+  gravity: GravityNodeProps
+  vorticity: VorticityNodeProps
   renderOutput: RenderOutputNodeProps
 }
 
@@ -87,6 +94,31 @@ function lightsFromPreset(preset: NewFilePreset): LightInstance[] {
   return preset.lights.map((l, i) => ({ id: `light-${i}`, label: l.label, props: { ...l.props } }))
 }
 
+function windFromRuntimeParams(params: SimulationRuntimeParams): WindNodeProps {
+  return {
+    directionX: params.wind[0],
+    directionY: params.wind[1],
+    directionZ: params.wind[2],
+    strength: params.windStrength,
+  }
+}
+
+function gravityFromRuntimeParams(params: SimulationRuntimeParams): GravityNodeProps {
+  return {
+    directionX: params.gravity?.[0] ?? 0,
+    directionY: params.gravity?.[1] ?? -1,
+    directionZ: params.gravity?.[2] ?? 0,
+    strength: params.gravityStrength ?? 0.45,
+    buoyancy: params.buoyancy,
+  }
+}
+
+function vorticityFromRuntimeParams(params: SimulationRuntimeParams): VorticityNodeProps {
+  return {
+    strength: params.vorticityStrength,
+  }
+}
+
 const defaultPreset = getNewFilePreset(defaultNewFilePresetId)
 
 export const nodeStore = proxy<NodeStoreState>({
@@ -106,6 +138,9 @@ export const nodeStore = proxy<NodeStoreState>({
     reactionDecayCool: 0.22,
   },
   advection: { mode: 'maccormack' },
+  wind: windFromRuntimeParams(defaultPreset.runtimeParams),
+  gravity: gravityFromRuntimeParams(defaultPreset.runtimeParams),
+  vorticity: vorticityFromRuntimeParams(defaultPreset.runtimeParams),
   renderOutput: {
     displayMode: 'temperature',
     stepCount: 400,
@@ -128,6 +163,33 @@ export function loadLightPreset(preset: NewFilePreset) {
   nodeStore.selectedId = null
   nodeStore.lights = lightsFromPreset(preset)
   lightCounter = nodeStore.lights.length
+}
+
+export function loadRuntimeNodePreset(preset: NewFilePreset) {
+  nodeStore.wind = windFromRuntimeParams(preset.runtimeParams)
+  nodeStore.gravity = gravityFromRuntimeParams(preset.runtimeParams)
+  nodeStore.vorticity = vorticityFromRuntimeParams(preset.runtimeParams)
+}
+
+export function runtimeParamsFromNodeStore(
+  store: Pick<NodeStoreState, 'wind' | 'gravity' | 'vorticity'>,
+  base: SimulationRuntimeParams,
+): SimulationRuntimeParams {
+  return {
+    ...base,
+    wind: [store.wind.directionX, store.wind.directionY, store.wind.directionZ],
+    windStrength: store.wind.strength,
+    gravity: [store.gravity.directionX, store.gravity.directionY, store.gravity.directionZ],
+    gravityStrength: store.gravity.strength,
+    buoyancy: store.gravity.buoyancy,
+    vorticityStrength: store.vorticity.strength,
+  }
+}
+
+export function applyRuntimeNodeParams(params: SimulationRuntimeParams) {
+  nodeStore.wind = windFromRuntimeParams(params)
+  nodeStore.gravity = gravityFromRuntimeParams(params)
+  nodeStore.vorticity = vorticityFromRuntimeParams(params)
 }
 
 function defaultScalarProps(): ScalarEmitterNodeProps {
@@ -221,6 +283,9 @@ export type SelectedKind =
   | { kind: 'light'; instance: LightInstance }
   | { kind: 'combustion' }
   | { kind: 'advection' }
+  | { kind: 'wind' }
+  | { kind: 'gravity' }
+  | { kind: 'vorticity' }
   | { kind: 'render-output' }
   | null
 
@@ -229,6 +294,9 @@ export function resolveSelected(store: NodeStoreState): SelectedKind {
   if (!id) return null
   if (id === 'combustion') return { kind: 'combustion' }
   if (id === 'advection') return { kind: 'advection' }
+  if (id === 'wind') return { kind: 'wind' }
+  if (id === 'gravity') return { kind: 'gravity' }
+  if (id === 'vorticity') return { kind: 'vorticity' }
   if (id === 'render-output') return { kind: 'render-output' }
   const emitter = store.emitters.find((e) => e.id === id)
   if (emitter) return { kind: 'emitter', instance: emitter }

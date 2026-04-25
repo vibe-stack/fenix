@@ -13,7 +13,13 @@ import type {
   CombustionVolumeSimulation,
   PressureBufferId,
   ScalarAdvectionMode,
+  SimulationQualitySettings,
 } from './combustion-volume-simulation/types'
+import {
+  createSimulationQualitySettings,
+  defaultSimulationQualitySettings,
+} from './combustion-volume-simulation/types'
+import { pressureIterationScheduleFor } from './combustion-volume-simulation/constants'
 import { ActiveBricksPass } from './passes/ActiveBricksPass'
 import { BuoyancyPass } from './passes/BuoyancyPass'
 import { ClearPass } from './passes/ClearPass'
@@ -35,7 +41,10 @@ export interface CombustionVolumeSimulationOptions {
   resolution?: VolumeResolution
   wind?: readonly [number, number, number]
   windStrength?: number
+  gravity?: readonly [number, number, number]
+  gravityStrength?: number
   worldSize?: number
+  qualitySettings?: Partial<SimulationQualitySettings>
 }
 
 export function createCombustionVolumeSimulation(
@@ -47,7 +56,7 @@ export function createCombustionVolumeSimulation(
   const sparseLayout = createSparseBrickLayout(resolution)
   const simulationParamsBuffer = device.createBuffer({
     label: 'simulation-params',
-    size: 48,
+    size: 64,
     usage: GPU_BUFFER_UNIFORM | GPU_BUFFER_COPY_DST,
   })
   const scalarA = createScalarFieldBuffers(device, 'scalar-a', voxelCount)
@@ -75,7 +84,14 @@ export function createCombustionVolumeSimulation(
     'active-sparse-brick-info',
     packSparseBrickLayout(sparseLayout),
   )
-  const pressureSolve = new PressureSolvePass(device, resolution)
+  let qualitySettings = createSimulationQualitySettings(
+    options.qualitySettings ?? defaultSimulationQualitySettings,
+  )
+  const pressureSolve = new PressureSolvePass(
+    device,
+    resolution,
+    pressureIterationScheduleFor(qualitySettings),
+  )
   const volumeInfo = pressureSolve.fine.volumeInfoBuffer
   const sourceInjection = new SourceInjectionPass(
     device,
@@ -162,7 +178,11 @@ export function createCombustionVolumeSimulation(
 
   let currentScalarSet = 0
   let scalarAdvectionMode = options.scalarAdvectionMode ?? 'maccormack'
-  let performanceSchedule = createSimulationPerformanceSchedule(resolution, scalarAdvectionMode)
+  let performanceSchedule = createSimulationPerformanceSchedule(
+    resolution,
+    qualitySettings,
+    scalarAdvectionMode,
+  )
   let initialized = false
   let simulationStartSeconds = 0
   let lastElapsedSeconds = 0
@@ -172,6 +192,8 @@ export function createCombustionVolumeSimulation(
   const shouldRunDebugEachFrame = voxelCount < 1_800_000
   let wind: [number, number, number] = options.wind ? [options.wind[0], options.wind[1], options.wind[2]] : [0, 0, 0]
   let windStrength = options.windStrength ?? 0
+  let gravity: [number, number, number] = options.gravity ? [options.gravity[0], options.gravity[1], options.gravity[2]] : [0, -1, 0]
+  let gravityStrength = options.gravityStrength ?? 0.45
   let buoyancy = 3.6
   let vorticityStrength = 2.15
   let worldSize = options.worldSize ?? 10.0
@@ -223,6 +245,10 @@ export function createCombustionVolumeSimulation(
           wind[1],
           wind[2],
           windStrength,
+          gravity[0],
+          gravity[1],
+          gravity[2],
+          gravityStrength,
           buoyancy,
           vorticityStrength,
           dx,
@@ -295,17 +321,43 @@ export function createCombustionVolumeSimulation(
     },
     setScalarAdvectionMode(mode) {
       scalarAdvectionMode = mode
-      performanceSchedule = createSimulationPerformanceSchedule(resolution, scalarAdvectionMode)
+      performanceSchedule = createSimulationPerformanceSchedule(
+        resolution,
+        qualitySettings,
+        scalarAdvectionMode,
+      )
     },
     getRuntimeParams() {
-      return { wind: [...wind] as [number, number, number], windStrength, buoyancy, vorticityStrength, worldSize }
+      return {
+        wind: [...wind] as [number, number, number],
+        windStrength,
+        gravity: [...gravity] as [number, number, number],
+        gravityStrength,
+        buoyancy,
+        vorticityStrength,
+        worldSize,
+      }
     },
     setRuntimeParams(params) {
       if (params.wind !== undefined) wind = [params.wind[0], params.wind[1], params.wind[2]]
       if (params.windStrength !== undefined) windStrength = params.windStrength
+      if (params.gravity !== undefined) gravity = [params.gravity[0], params.gravity[1], params.gravity[2]]
+      if (params.gravityStrength !== undefined) gravityStrength = params.gravityStrength
       if (params.buoyancy !== undefined) buoyancy = params.buoyancy
       if (params.vorticityStrength !== undefined) vorticityStrength = params.vorticityStrength
       if (params.worldSize !== undefined) worldSize = params.worldSize
+    },
+    getQualitySettings() {
+      return { ...qualitySettings }
+    },
+    setQualitySettings(settings) {
+      qualitySettings = createSimulationQualitySettings({ ...qualitySettings, ...settings })
+      pressureSolve.setIterationSchedule(pressureIterationScheduleFor(qualitySettings))
+      performanceSchedule = createSimulationPerformanceSchedule(
+        resolution,
+        qualitySettings,
+        scalarAdvectionMode,
+      )
     },
     updateSources(sources) {
       sourceInjection.updateSources(sources)

@@ -27,7 +27,7 @@ export interface OrbitCameraController {
 
 const WORLD_UP = createVector3(0, 1, 0)
 
-export function createOrbitCameraController(): OrbitCameraController {
+export function createOrbitCameraController(onChange?: () => void): OrbitCameraController {
   let canvas: HTMLElement | null = null
   let aspect = 1
   let yaw = -0.62
@@ -75,11 +75,13 @@ export function createOrbitCameraController(): OrbitCameraController {
       target.x += panOffset.x
       target.y = clamp(target.y + panOffset.y, -12, 96)
       target.z += panOffset.z
+      onChange?.()
       return
     }
 
     yaw -= deltaX * 0.008
     pitch = clamp(pitch - deltaY * 0.008, -1.2, 1.2)
+    onChange?.()
   }
 
   const releasePointer = (event: PointerEvent) => {
@@ -97,7 +99,8 @@ export function createOrbitCameraController(): OrbitCameraController {
 
   const onWheel = (event: WheelEvent) => {
     event.preventDefault()
-    radius = clamp(radius + event.deltaY * 0.045, 16, 220)
+    radius = clamp(radius + event.deltaY * 0.045, 16, 660)
+    onChange?.()
   }
 
   return {

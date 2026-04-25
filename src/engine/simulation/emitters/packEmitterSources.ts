@@ -19,7 +19,7 @@ export const FLOATS_PER_EMITTER = 32
  *   [4]  direction:      xyz=direction, w=0
  *   [5]  noise:          x=noiseScale, y=noiseMix, z=intensity, w=0
  *   [6]  padding
- *   [7]  meta:           x=kind(0/1/2), y=seed, zw=0
+ *   [7]  _meta:           x=kind(0/1/2), y=seed, zw=0
  */
 export function packEmitterSources(sources: readonly EmitterSource[]): Float32Array {
   const data = new Float32Array(sources.length * FLOATS_PER_EMITTER)

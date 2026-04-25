@@ -2,7 +2,10 @@ import type {
   SimulationProfile,
   ViewportShadingMode,
 } from '../../editor/models/workspace'
-import type { SimulationRuntimeParams } from '../../engine/simulation/runtime/combustion-volume-simulation/types'
+import type {
+  SimulationQualitySettings,
+  SimulationRuntimeParams,
+} from '../../engine/simulation/runtime/combustion-volume-simulation/types'
 
 export type EditorCommand =
   | {
@@ -50,4 +53,8 @@ export type EditorCommand =
   | {
       type: 'simulation/set-runtime-params'
       params: Partial<SimulationRuntimeParams>
+    }
+  | {
+      type: 'simulation/set-quality-settings'
+      settings: Partial<SimulationQualitySettings>
     }

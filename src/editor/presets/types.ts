@@ -38,5 +38,9 @@ export function createLight(label: string, props: LightNodeProps): PresetLight {
 }
 
 export function cloneRuntimeParams(params: SimulationRuntimeParams): SimulationRuntimeParams {
-  return { ...params, wind: [params.wind[0], params.wind[1], params.wind[2]] }
+  return {
+    ...params,
+    wind: [params.wind[0], params.wind[1], params.wind[2]],
+    gravity: [params.gravity[0], params.gravity[1], params.gravity[2]],
+  }
 }

@@ -25,6 +25,12 @@ export const foundationalNodeTypes: GraphNodeDefinition[] = [
     description: 'Advects scalar and vector fields through the velocity domain each step.',
   },
   {
+    id: 'vorticity',
+    label: 'Vorticity',
+    category: 'Forces',
+    description: 'Controls curl confinement strength to preserve rotational detail.',
+  },
+  {
     id: 'light',
     label: 'Light',
     category: 'Lighting',

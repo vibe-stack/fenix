@@ -59,11 +59,13 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     container.replaceChildren(canvas)
 
     const gpu = await createRawWebGPUContext(canvas)
-    const controls = createOrbitCameraController()
+    const controls = createOrbitCameraController(() => this.scheduleFrame())
     const simulation = createCombustionVolumeSimulation(gpu.device, {
       resolution: this.resolution,
       wind: [0, 0, 0],
       windStrength: 0,
+      gravity: [0, -1, 0],
+      gravityStrength: 0.45,
     })
     const raymarchPass = createVolumeRaymarchPass(gpu.device, gpu.format, simulation.resolution)
 
@@ -145,9 +147,12 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
       },
       setWindDirection: (x, y, z) => simulation.setRuntimeParams({ wind: [x, y, z] }),
       setWindStrength: (v) => simulation.setRuntimeParams({ windStrength: v }),
+      setGravityDirection: (x, y, z) => simulation.setRuntimeParams({ gravity: [x, y, z] }),
+      setGravityStrength: (v) => simulation.setRuntimeParams({ gravityStrength: v }),
       setBuoyancy: (v) => simulation.setRuntimeParams({ buoyancy: v }),
       setVorticityStrength: (v) => simulation.setRuntimeParams({ vorticityStrength: v }),
       setWorldSize: (v) => simulation.setRuntimeParams({ worldSize: v }),
+      setSimulationQuality: (settings) => simulation.setQualitySettings(settings),
       updateSources: (sources) => simulation.updateSources(sources),
       setRenderParams: (params) => this.raymarchPass?.setRenderParams(params),
       getCanvas: () => this.canvas,

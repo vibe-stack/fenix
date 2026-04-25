@@ -19,7 +19,7 @@ import { useGraphNodes } from './useGraphNodes'
 import { GraphContextMenu } from './GraphContextMenu'
 
 // Fixed nodes cannot be deleted
-const FIXED_NODE_IDS = new Set(['combustion', 'advection', 'render-output'])
+const FIXED_NODE_IDS = new Set(['combustion', 'advection', 'wind', 'vorticity', 'gravity', 'render-output'])
 
 interface ContextMenuState {
   screenX: number

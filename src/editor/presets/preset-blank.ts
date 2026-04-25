@@ -17,6 +17,8 @@ export const blankPreset: NewFilePreset = {
   runtimeParams: {
     wind: [0, 0, 0],
     windStrength: 0,
+    gravity: [0, -1, 0],
+    gravityStrength: 0.45,
     buoyancy: 3.6,
     vorticityStrength: 2.15,
     worldSize: 10,

@@ -52,7 +52,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     if (dist > radius) { continue; }
 
     let weight  = sphereFalloff(dist, radius, 0.5);
-    let noise   = emitterNoise(pos, src.noise.x, src.meta.y);
+    let noise   = emitterNoise(pos, src.noise.x, src._meta.y);
     let modulation = mix(1.0, noise, clamp(src.noise.y, 0.0, 1.0));
     let contribution = weight * modulation * params.deltaTime;
 

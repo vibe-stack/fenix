@@ -1,4 +1,4 @@
-import type { VolumeResolution } from '../../common/volumeResolution'
+import type { SimulationQualitySettings } from './types'
 
 export const WORKGROUP_SIZE = 4
 export const TILE_SIZE = WORKGROUP_SIZE + 2
@@ -12,19 +12,15 @@ export interface PressureIterationSchedule {
 }
 
 export function pressureIterationScheduleFor(
-  resolution: VolumeResolution,
+  qualitySettings: SimulationQualitySettings,
 ): PressureIterationSchedule {
-  const voxelCount = resolution.width * resolution.height * resolution.depth
-
-  if (voxelCount >= 4_000_000) {
-    return { finePre: 1, finePost: 1, midPre: 1, midPost: 0, coarse: 2 }
+  return {
+    finePre: qualitySettings.finePreIterations,
+    finePost: qualitySettings.finePostIterations,
+    midPre: qualitySettings.midPreIterations,
+    midPost: qualitySettings.midPostIterations,
+    coarse: qualitySettings.coarseIterations,
   }
-
-  if (voxelCount >= 1_800_000) {
-    return { finePre: 2, finePost: 2, midPre: 2, midPost: 1, coarse: 6 }
-  }
-
-  return { finePre: 2, finePost: 3, midPre: 2, midPost: 3, coarse: 10 }
 }
 
 export const GPU_BUFFER_UNIFORM = 0x0040

@@ -76,6 +76,8 @@ export const volcanicEruptionPreset: NewFilePreset = {
   runtimeParams: {
     wind: [0.042, 0, -0.022],
     windStrength: 0.25,
+    gravity: [0, -1, 0],
+    gravityStrength: 0.45,
     buoyancy: 7.2,
     vorticityStrength: 3.8,
     worldSize: 200,

@@ -5,6 +5,7 @@ import { TimelinePanel } from '../../ui/components/timeline/TimelinePanel'
 import { TopToolbar } from '../../ui/components/toolbar/TopToolbar'
 import { ViewportCanvasCard } from '../../ui/components/viewport/ViewportCanvasCard'
 import { usePanelResize } from '../../ui/hooks/usePanelResize'
+import { useVerticalPanelResize } from '../../ui/hooks/useVerticalPanelResize'
 import type { RendererDiagnostics, SimulationHandle } from '../../engine/core/types/platform'
 import type { RendererBridge } from '../../engine/render/renderer/createRendererBridge'
 import { SimulationHandleContext } from '../../features/viewport/SimulationHandleContext'
@@ -18,6 +19,7 @@ export function EditorLayout({ rendererBridge, diagnostics }: EditorLayoutProps)
   const [simulationHandle, setSimulationHandle] = useState<SimulationHandle | null>(null)
   const onHandleChange = useCallback((h: SimulationHandle | null) => setSimulationHandle(h), [])
   const graph = usePanelResize(520, 240, 900)
+  const timeline = useVerticalPanelResize(40, 40, 320)
 
   return (
     <SimulationHandleContext value={simulationHandle}>
@@ -32,7 +34,19 @@ export function EditorLayout({ rendererBridge, diagnostics }: EditorLayoutProps)
               rendererBridge={rendererBridge}
               onHandleChange={onHandleChange}
             />
-            <TimelinePanel />
+            <div
+              onMouseDown={timeline.onMouseDown}
+              style={{
+                height: 4,
+                flexShrink: 0,
+                cursor: 'row-resize',
+                background: 'var(--fenix-bg)',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--fenix-accent)' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--fenix-bg)' }}
+            />
+            <TimelinePanel height={timeline.height} />
           </div>
 
           {/* Resize handle between canvas and graph */}
@@ -72,7 +86,7 @@ export function EditorLayout({ rendererBridge, diagnostics }: EditorLayoutProps)
           </div>
 
           {/* Right — inspector */}
-          <div className="w-60 shrink-0 overflow-y-auto bg-(--fenix-panel)" style={{ borderLeft: '1px solid rgba(255,255,255,0.04)' }}>
+          <div className="w-78 shrink-0 overflow-y-auto bg-(--fenix-panel)" style={{ borderLeft: '1px solid rgba(255,255,255,0.04)' }}>
             <InspectorPanel />
           </div>
         </div>

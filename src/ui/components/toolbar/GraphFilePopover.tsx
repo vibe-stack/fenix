@@ -1,7 +1,11 @@
 import { useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { nodeStore, loadEmitterPreset, loadLightPreset } from '../../../store/node-store/nodeStore'
-import { nodeGraphStore, resetNodeGraph } from '../../../store/node-store/nodeGraphStore'
+import {
+  applyRuntimeNodeParams,
+  nodeStore,
+  runtimeParamsFromNodeStore,
+} from '../../../store/node-store/nodeStore'
+import { resetNodeGraph } from '../../../store/node-store/nodeGraphStore'
 import { useEditorDispatch, useEditorStore } from '../../hooks/useEditorStore'
 import { useSimulationHandle } from '../../../features/viewport/SimulationHandleContext'
 import {
@@ -15,19 +19,25 @@ export function GraphFilePopover() {
   const dispatch = useEditorDispatch()
   const handle = useSimulationHandle()
   const runtimeParams = useEditorStore((s) => s.simulationState.runtimeParams)
+  const qualitySettings = useEditorStore((s) => s.simulationState.qualitySettings)
   const snap = useSnapshot(nodeStore)
   const [open, setOpen] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function handleExport() {
+    const graphRuntimeParams = runtimeParamsFromNodeStore(snap, runtimeParams)
     const graph = serializeGraph(
-      runtimeParams,
+      graphRuntimeParams,
       snap.emitters as SerializedGraph['emitters'],
       snap.lights as SerializedGraph['lights'],
       snap.combustion,
       snap.advection,
+      snap.wind,
+      snap.gravity,
+      snap.vorticity,
       snap.renderOutput,
+      qualitySettings,
     )
     downloadGraphAsJson(graph)
     setOpen(false)
@@ -64,9 +74,21 @@ export function GraphFilePopover() {
     nodeStore.lights = graph.lights.map((l) => ({ ...l, props: { ...l.props } }))
     nodeStore.combustion = { ...graph.combustion }
     nodeStore.advection = { ...graph.advection }
+    nodeStore.wind = { ...graph.wind }
+    nodeStore.gravity = { ...graph.gravity }
+    nodeStore.vorticity = { ...graph.vorticity }
     Object.assign(nodeStore.renderOutput, graph.renderOutput)
     resetNodeGraph(graph.emitters.length, graph.lights.length)
-    dispatch({ type: 'simulation/set-runtime-params', params: { ...graph.runtimeParams, wind: [...graph.runtimeParams.wind] as [number, number, number] } })
+    dispatch({
+      type: 'simulation/set-runtime-params',
+      params: {
+        ...graph.runtimeParams,
+        wind: [...graph.runtimeParams.wind] as [number, number, number],
+        gravity: [...graph.runtimeParams.gravity] as [number, number, number],
+      },
+    })
+    dispatch({ type: 'simulation/set-quality-settings', settings: graph.simulationQuality })
+    applyRuntimeNodeParams(runtimeParamsFromNodeStore(nodeStore, graph.runtimeParams))
     handle?.reset()
   }
 

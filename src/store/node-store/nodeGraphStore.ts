@@ -18,11 +18,17 @@ export interface NodeGraphStoreState {
 const fixedNodePositions: Record<string, XYPosition> = {
   combustion:      { x: 340, y: 200 },
   advection:       { x: 580, y: 200 },
+  wind:            { x: 340, y: 56 },
+  vorticity:       { x: 460, y: 56 },
+  gravity:         { x: 580, y: 56 },
   'render-output': { x: 820, y: 200 },
 }
 
 const fixedEdges: GraphEdge[] = [
   { id: 'comb-adv', source: 'combustion', target: 'advection' },
+  { id: 'wind-adv', source: 'wind', target: 'advection' },
+  { id: 'vorticity-adv', source: 'vorticity', target: 'advection' },
+  { id: 'gravity-adv', source: 'gravity', target: 'advection' },
   { id: 'adv-ro',   source: 'advection',  target: 'render-output' },
 ]
 

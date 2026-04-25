@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 interface SliderRowProps {
   label: string
   value: number
@@ -8,7 +10,40 @@ interface SliderRowProps {
   onChange: (value: number) => void
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value))
+}
+
+function formatValue(value: number, decimals: number) {
+  return Number.isFinite(value) ? value.toFixed(decimals) : ''
+}
+
 export function SliderRow({ label, value, min, max, step = 0.01, decimals = 2, onChange }: SliderRowProps) {
+  const [draftValue, setDraftValue] = useState('')
+  const [isEditingNumber, setIsEditingNumber] = useState(false)
+  const inputValue = isEditingNumber ? draftValue : formatValue(value, decimals)
+
+  function commitValue(nextValue: number) {
+    if (!Number.isFinite(nextValue)) {
+      return
+    }
+
+    const clampedValue = clamp(nextValue, min, max)
+    onChange(clampedValue)
+    return clampedValue
+  }
+
+  function commitDraftValue(rawValue: string) {
+    if (rawValue.trim() === '') {
+      setDraftValue(formatValue(value, decimals))
+      return
+    }
+
+    const nextValue = Number(rawValue)
+    const clampedValue = commitValue(nextValue)
+    setDraftValue(formatValue(clampedValue ?? value, decimals))
+  }
+
   return (
     <div className="flex items-center gap-2 px-3 py-1.5">
       <span className="w-20 shrink-0 text-[9px] uppercase tracking-[0.2em] text-(--fenix-text-muted)">
@@ -20,7 +55,12 @@ export function SliderRow({ label, value, min, max, step = 0.01, decimals = 2, o
         max={max}
         step={step}
         value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={(e) => {
+          const nextValue = commitValue(Number(e.target.value))
+          if (nextValue !== undefined) {
+            setDraftValue(formatValue(nextValue, decimals))
+          }
+        }}
         className="h-0.5 flex-1 cursor-pointer appearance-none bg-(--fenix-row) accent-(--fenix-accent)"
       />
       <input
@@ -28,15 +68,31 @@ export function SliderRow({ label, value, min, max, step = 0.01, decimals = 2, o
         min={min}
         max={max}
         step={step}
-        value={value.toFixed(decimals)}
+        value={inputValue}
+        onFocus={() => {
+          setDraftValue(formatValue(value, decimals))
+          setIsEditingNumber(true)
+        }}
         onChange={(e) => {
-          const nextValue = Number(e.target.value)
-          if (!Number.isFinite(nextValue)) {
+          const rawValue = e.target.value
+          setDraftValue(rawValue)
+
+          if (rawValue.trim() === '') {
             return
           }
-          onChange(Math.max(min, Math.min(max, nextValue)))
+
+          commitValue(Number(rawValue))
         }}
-        className="w-20 shrink-0 rounded border border-(--fenix-row) bg-(--fenix-panel) px-2 py-1 text-right text-[11px] tabular-nums text-(--fenix-text) outline-none focus:border-(--fenix-accent)"
+        onBlur={() => {
+          commitDraftValue(draftValue)
+          setIsEditingNumber(false)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.currentTarget.blur()
+          }
+        }}
+        className="h-6 w-20 shrink-0 rounded border border-(--fenix-row) bg-(--fenix-panel) px-2 text-right text-[11px] tabular-nums text-(--fenix-text) outline-none focus:border-(--fenix-accent)"
       />
     </div>
   )

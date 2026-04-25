@@ -6,10 +6,7 @@ import { createPressureProlongationShader } from '../../shaders/passes/pressure-
 import { createPressureResidualShader } from '../../shaders/passes/pressure-residual.wgsl'
 import { createPressureRestrictionShader } from '../../shaders/passes/pressure-restriction.wgsl'
 import { createStaticBuffer, createStorageBuffer, halveResolution, voxelCountFor } from '../combustion-volume-simulation/buffers'
-import {
-  type PressureIterationSchedule,
-  pressureIterationScheduleFor,
-} from '../combustion-volume-simulation/constants'
+import { type PressureIterationSchedule } from '../combustion-volume-simulation/constants'
 import type { ComputeResources, PressureBufferId, PressureLevel } from '../combustion-volume-simulation/types'
 import { createComputeResources } from '../shared/createComputeResources'
 import { dispatchLinear, dispatchVolume } from '../shared/createVolumeDispatch'
@@ -23,9 +20,9 @@ export class PressureSolvePass {
   private readonly restrictMidToCoarse: ComputeResources
   private readonly prolongateCoarse: Record<PressureBufferId, ComputeResources>
   private readonly prolongateMid: Record<PressureBufferId, ComputeResources>
-  private readonly iterations: PressureIterationSchedule
+  private iterations: PressureIterationSchedule
 
-  constructor(device: GPUDevice, resolution: VolumeResolution) {
+  constructor(device: GPUDevice, resolution: VolumeResolution, iterations: PressureIterationSchedule) {
     const clear = createComputePipeline(device, 'clear-storage-buffer', 'clear-storage-buffer-shader', createClearStorageBufferShader())
     const residual = createComputePipeline(device, 'compute-pressure-residual-local', 'pressure-residual-shader', createPressureResidualShader())
     const jacobi = createComputePipeline(device, 'smooth-pressure-local', 'pressure-jacobi-shader', createPressureJacobiShader())
@@ -33,7 +30,7 @@ export class PressureSolvePass {
     const prolongate = createComputePipeline(device, 'prolongate-pressure', 'pressure-prolongation-shader', createPressureProlongationShader())
 
     this.fine = createLevel(device, 'fine', resolution, clear, residual, jacobi)
-    this.iterations = pressureIterationScheduleFor(resolution)
+  this.iterations = iterations
     this.mid = createLevel(device, 'mid', halveResolution(resolution), clear, residual, jacobi)
     this.coarse = createLevel(device, 'coarse', halveResolution(this.mid.resolution), clear, residual, jacobi)
     this.restrictFineToMid = createComputeResources(device, restrict, 'restrict-fine-to-mid', [
@@ -56,6 +53,10 @@ export class PressureSolvePass {
       a: createProlongation(device, prolongate, this.mid, this.fine, this.mid.pressureA),
       b: createProlongation(device, prolongate, this.mid, this.fine, this.mid.pressureB),
     }
+  }
+
+  setIterationSchedule(iterations: PressureIterationSchedule) {
+    this.iterations = iterations
   }
 
   clear(encoder: GPUCommandEncoder) {

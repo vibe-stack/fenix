@@ -88,6 +88,8 @@ export const artilleryBurstPreset: NewFilePreset = {
   runtimeParams: {
     wind: [0.032, 0, -0.018],
     windStrength: 0.22,
+    gravity: [0, -1, 0],
+    gravityStrength: 0.45,
     buoyancy: 4.8,
     vorticityStrength: 4.2,
     worldSize: 50,

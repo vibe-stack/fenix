@@ -4,8 +4,14 @@ import {
   getNewFilePreset,
   newFilePresets,
 } from '../../../editor/presets/newFilePresets'
+import { defaultSimulationQualitySettings } from '../../../engine/simulation/runtime/combustion-volume-simulation/types'
 import { useSimulationHandle } from '../../../features/viewport/SimulationHandleContext'
-import { loadEmitterPreset, loadLightPreset, nodeStore } from '../../../store/node-store/nodeStore'
+import {
+  loadEmitterPreset,
+  loadLightPreset,
+  loadRuntimeNodePreset,
+  nodeStore,
+} from '../../../store/node-store/nodeStore'
 import { resetNodeGraph } from '../../../store/node-store/nodeGraphStore'
 import { useEditorDispatch } from '../../hooks/useEditorStore'
 
@@ -19,6 +25,7 @@ export function NewFilePopover() {
 
     loadEmitterPreset(preset)
     loadLightPreset(preset)
+    loadRuntimeNodePreset(preset)
     resetNodeGraph(preset.emitters.length, preset.lights.length)
     Object.assign(nodeStore.renderOutput, {
       displayMode: 'temperature',
@@ -30,6 +37,10 @@ export function NewFilePopover() {
     dispatch({
       type: 'simulation/set-runtime-params',
       params: clonePresetRuntimeParams(preset),
+    })
+    dispatch({
+      type: 'simulation/set-quality-settings',
+      settings: defaultSimulationQualitySettings,
     })
     handle?.reset()
     setOpen(false)

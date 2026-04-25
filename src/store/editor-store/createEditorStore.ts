@@ -170,5 +170,18 @@ function reduceEditorSnapshot(
         },
       }
     }
+
+    case 'simulation/set-quality-settings': {
+      return {
+        ...snapshot,
+        simulationState: {
+          ...snapshot.simulationState,
+          qualitySettings: {
+            ...snapshot.simulationState.qualitySettings,
+            ...command.settings,
+          },
+        },
+      }
+    }
   }
 }

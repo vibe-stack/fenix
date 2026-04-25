@@ -87,7 +87,8 @@ export function createVolumeRaymarchPass(
   }
   const volumeCenterY = volumeHalfExtents.y - 0.25
   const voxelCount = resolution.width * resolution.height * resolution.depth
-  const defaultStepCount = voxelCount >= 4_000_000 ? 220 : voxelCount >= 1_800_000 ? 400 : 180
+  const maxAxisResolution = Math.max(resolution.width, resolution.height, resolution.depth)
+  const defaultStepCount = clamp(Math.round(maxAxisResolution * 1.5), 180, voxelCount >= 4_000_000 ? 720 : 560)
 
   let stepCount = defaultStepCount
   let lights = sanitizeRenderLights(undefined)

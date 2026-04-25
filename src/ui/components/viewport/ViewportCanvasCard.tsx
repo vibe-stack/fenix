@@ -20,7 +20,9 @@ export function ViewportCanvasCard({ diagnostics, rendererBridge, onHandleChange
   return (
     <ViewportSurface
       background={viewportState.background}
+      diagnostics={diagnostics}
       displayMode={viewportState.shadingMode}
+      overlays={viewportState.overlays}
       rendererBridge={rendererBridge}
       runtimeKey={runtimeKey}
       resolution={resolution}

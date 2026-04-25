@@ -45,7 +45,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   let dt = params.deltaTime;
   let buoyancyResponse = params.buoyancy * (1.0 + smoothstep(6.0, 24.0, abs(params.buoyancy)) * 0.38);
   let temperatureLift = temperatureField[index] * buoyancyResponse;
-  let smokeWeight = densityField[index] * 0.45;
+  let gravityForce = params.gravity.xyz * densityField[index] * params.gravity.w;
   let hotEntrainment = densityField[index] * smoothstep(0.06, 0.34, temperatureField[index]);
   let normalizedY = (f32(id.y) + 0.5) / f32(volumeInfo.height);
   let shear = sin(f32(id.y) * 0.073 + params.time * 0.9) * 0.35 +
@@ -80,13 +80,14 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   var velocity = velocityField[index].xyz * (1.0 - dt * 0.08);
 
   velocity += wind * dt;
+  velocity += gravityForce * dt;
   velocity += temperatureGradient * collapseAmount * dt * (3.2 + abs(params.buoyancy) * 0.08);
   velocity += (-densityGradient / densityGradientLength) * surfaceBreakup * dt * 2.8;
   velocity += shredDirection * coldSmoke * dt * (0.72 + surfaceBreakup * 2.4);
   velocity += params.wind.xyz * coldSmoke * params.wind.w * dt * 0.9;
   let voxelSpeedLimit = 80.0 / max(params.dx, 0.001);
   velocity.y = clamp(
-    velocity.y + (temperatureLift + hotEntrainment * buoyancyResponse * 0.24 - smokeWeight) * dt,
+    velocity.y + (temperatureLift + hotEntrainment * buoyancyResponse * 0.24) * dt,
     -voxelSpeedLimit,
     voxelSpeedLimit,
   );

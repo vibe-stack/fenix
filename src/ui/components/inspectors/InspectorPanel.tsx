@@ -6,6 +6,9 @@ import { ViewportSection } from './ViewportSection'
 import { EmitterNodeInspector } from './nodes/EmitterNodeInspector'
 import { CombustionNodeInspector } from './nodes/CombustionNodeInspector'
 import { AdvectionNodeInspector } from './nodes/AdvectionNodeInspector'
+import { WindNodeInspector } from './nodes/WindNodeInspector'
+import { VorticityNodeInspector } from './nodes/VorticityNodeInspector'
+import { GravityNodeInspector } from './nodes/GravityNodeInspector'
 import { LightNodeInspector } from './nodes/LightNodeInspector'
 import { RenderOutputNodeInspector } from './nodes/RenderOutputNodeInspector'
 
@@ -26,6 +29,9 @@ function NodeInspector({ selectedId }: { selectedId: string | null }) {
   if (!selectedId) return null
   if (selectedId === 'combustion') return <CombustionNodeInspector />
   if (selectedId === 'advection') return <AdvectionNodeInspector />
+  if (selectedId === 'wind') return <WindNodeInspector />
+  if (selectedId === 'vorticity') return <VorticityNodeInspector />
+  if (selectedId === 'gravity') return <GravityNodeInspector />
   if (selectedId === 'render-output') return <RenderOutputNodeInspector />
   if (selectedId.startsWith('light-')) return <LightNodeInspector id={selectedId} />
   if (selectedId.startsWith('emitter-')) return <EmitterNodeInspector id={selectedId} />

@@ -67,6 +67,25 @@ export interface AdvectionNodeProps {
   mode: 'maccormack' | 'semi-lagrangian'
 }
 
+export interface WindNodeProps {
+  directionX: number
+  directionY: number
+  directionZ: number
+  strength: number
+}
+
+export interface GravityNodeProps {
+  directionX: number
+  directionY: number
+  directionZ: number
+  strength: number
+  buoyancy: number
+}
+
+export interface VorticityNodeProps {
+  strength: number
+}
+
 export interface LightNodeProps {
   lightType: 'directional' | 'point'
   dirX: number
@@ -92,6 +111,9 @@ export type NodePropsMap = {
   'emitter-source': EmitterNodeProps
   'combustion': CombustionNodeProps
   'advection': AdvectionNodeProps
+  'wind': WindNodeProps
+  'gravity': GravityNodeProps
+  'vorticity': VorticityNodeProps
   'light': LightNodeProps
   'render-output': RenderOutputNodeProps
 }
