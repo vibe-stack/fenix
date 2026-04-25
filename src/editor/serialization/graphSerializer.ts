@@ -1,7 +1,7 @@
 import type { EmitterNodeProps, LightNodeProps, CombustionNodeProps, AdvectionNodeProps, RenderOutputNodeProps } from '../../engine/graph/schema/nodeProps'
 import type { SimulationRuntimeParams } from '../../engine/simulation/runtime/combustion-volume-simulation/types'
 
-export const GRAPH_FILE_VERSION = 1
+export const GRAPH_FILE_VERSION = 2
 
 export interface SerializedEmitter {
   id: string
@@ -66,13 +66,18 @@ export function parseGraphJson(raw: string): SerializedGraph {
   if (typeof parsed !== 'object' || parsed === null) throw new Error('Invalid graph file.')
   const obj = parsed as Record<string, unknown>
 
+  if (obj['version'] === 1) {
+    throw new Error(
+      'This file was saved with an older version of Fenix and is not compatible with the new emitter model. Please recreate the effect using the new emitter types.',
+    )
+  }
+
   if (obj['version'] !== GRAPH_FILE_VERSION) {
     throw new Error(
       `Unsupported graph version: ${obj['version']}. Expected ${GRAPH_FILE_VERSION}.`,
     )
   }
 
-  // Minimal structural validation — enough to give a clear error, not exhaustive schema validation.
   if (!Array.isArray(obj['emitters'])) throw new Error('Missing emitters array.')
   if (!Array.isArray(obj['lights'])) throw new Error('Missing lights array.')
   if (typeof obj['runtimeParams'] !== 'object') throw new Error('Missing runtimeParams.')
@@ -81,7 +86,6 @@ export function parseGraphJson(raw: string): SerializedGraph {
   if (typeof obj['renderOutput'] !== 'object') throw new Error('Missing renderOutput node.')
 
   const graph = obj as unknown as SerializedGraph
-  // Backfill fields added after version 1 so old saves still load cleanly.
   if (typeof graph.runtimeParams.worldSize !== 'number') {
     graph.runtimeParams.worldSize = 10
   }

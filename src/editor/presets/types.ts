@@ -1,10 +1,9 @@
 import type { SimulationRuntimeParams } from '../../engine/simulation/runtime/combustion-volume-simulation/types'
-import type { LightNodeProps, RenderOutputNodeProps } from '../../engine/graph/schema/nodeProps'
-import type { ExplosionSource } from '../../engine/simulation/runtime/passes/explosionSources'
+import type { EmitterNodeProps, LightNodeProps, RenderOutputNodeProps } from '../../engine/graph/schema/nodeProps'
 
 export interface PresetEmitter {
   label: string
-  source: ExplosionSource
+  props: EmitterNodeProps
 }
 
 export interface PresetLight {
@@ -22,8 +21,16 @@ export interface NewFilePreset {
   renderOutput: Partial<RenderOutputNodeProps>
 }
 
-export function createEmitter(label: string, source: ExplosionSource): PresetEmitter {
-  return { label, source }
+export function createScalarEmitter(label: string, props: import('../../engine/graph/schema/nodeProps').ScalarEmitterNodeProps): PresetEmitter {
+  return { label, props: { kind: 'scalar', ...props } }
+}
+
+export function createVelocityEmitter(label: string, props: import('../../engine/graph/schema/nodeProps').VelocityEmitterNodeProps): PresetEmitter {
+  return { label, props: { kind: 'velocity', ...props } }
+}
+
+export function createIgniterEmitter(label: string, props: import('../../engine/graph/schema/nodeProps').IgniterEmitterNodeProps): PresetEmitter {
+  return { label, props: { kind: 'igniter', ...props } }
 }
 
 export function createLight(label: string, props: LightNodeProps): PresetLight {

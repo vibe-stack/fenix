@@ -1,42 +1,44 @@
-import { createEmitter, createLight, type NewFilePreset } from './types'
+import { createScalarEmitter, createIgniterEmitter, createLight, type NewFilePreset } from './types'
 
-// A campfire has no explosion — it's a sustained low-energy heat source.
-// The shader's blastGate drives a sin(blastAge*PI) bell curve over blastDuration,
-// so a very long blastDuration (many seconds) produces a slow, gentle injection
-// that looks like continuous emission rather than a detonation.
-// High sustain keeps heat/fuel alive into the plume phase so the flame never
-// fully dies, and the long plumeDuration carries the smoke column indefinitely.
 export const campfirePreset: NewFilePreset = {
   id: 'campfire',
   label: 'Campfire',
   description: 'Sustained low flame with a turbulent thermal column and drifting smoke.',
   emitters: [
-    createEmitter('Fire', {
-      position: [0.5, 0.058, 0.5],
-      radius: 0.042,
+    // Continuous heat and fuel — combustion pass turns these into fire and soot.
+    createScalarEmitter('Flame', {
+      positionX: 0.5, positionY: 0.06, positionZ: 0.5,
+      radius: 0.035,
       startTime: 0,
-      smokeLeadTime: 0,
-      blastDuration: 18,
-      plumeDuration: 60,
-      densityYield: 0.48,
-      heatYield: 7.5,
-      fuelYield: 9.2,
-      reactionYield: 1.4,
-      radialImpulse: 1.8,
-      liftDirection: [0, 1, 0],
-      liftImpulse: 4.8,
-      heatPatchiness: 0.24,
-      patchScale: 9,
-      coreHeat: 3.8,
-      coreLift: 6.2,
-      turbulence: 2.2,
-      crumbleStrength: 1.5,
-      implosionStrength: 0,
-      expansionRate: 0.18,
-      sustain: 2.8,
-      mushroomStrength: 0.06,
-      smokeEntrainment: 0.5,
+      duration: 9999,
+      densityRate: 0,    // combustion produces the soot, not us
+      heatRate: 6,
+      fuelRate: 8,
+      noiseScale: 12,
+      noiseMix: 0.5,
       seed: 607,
+    }),
+    // Separate wider smoke emitter — cold, no heat, just density drifting up.
+    createScalarEmitter('Smoke', {
+      positionX: 0.5, positionY: 0.09, positionZ: 0.5,
+      radius: 0.055,
+      startTime: 0.5,
+      duration: 9999,
+      densityRate: 1.2,
+      heatRate: 0,
+      fuelRate: 0,
+      noiseScale: 6,
+      noiseMix: 0.7,
+      seed: 613,
+    }),
+    // Spark to ignite the fuel at t=0.
+    createIgniterEmitter('Ignition', {
+      positionX: 0.5, positionY: 0.065, positionZ: 0.5,
+      radius: 0.04,
+      startTime: 0,
+      duration: 0.3,
+      intensity: 0.9,
+      seed: 619,
     }),
   ],
   lights: [

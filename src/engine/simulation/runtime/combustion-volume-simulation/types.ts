@@ -11,7 +11,7 @@ export interface SimulationRuntimeParams {
   worldSize: number
 }
 
-import type { ExplosionSource } from '../passes/explosionSources'
+import type { EmitterSource } from '../../emitters/emitterSource'
 
 export interface CombustionVolumeSimulation {
   readonly resolution: VolumeResolution
@@ -22,7 +22,7 @@ export interface CombustionVolumeSimulation {
   setScalarAdvectionMode(mode: ScalarAdvectionMode): void
   getRuntimeParams(): SimulationRuntimeParams
   setRuntimeParams(params: Partial<SimulationRuntimeParams>): void
-  updateSources(sources: readonly ExplosionSource[]): void
+  updateSources(sources: readonly EmitterSource[]): void
   reset(): void
   dispose(): void
 }

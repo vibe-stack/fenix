@@ -12,7 +12,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { nodeStore } from '../../../store/node-store/nodeStore'
-import { addEmitter, addLight, removeEmitter, removeLight } from '../../../store/node-store/nodeStore'
+import { addScalarEmitter, addVelocityEmitter, addIgniterEmitter, addLight, removeEmitter, removeLight } from '../../../store/node-store/nodeStore'
 import { addEdge, removeEdges, removeNodeFromGraph, setNodePosition } from '../../../store/node-store/nodeGraphStore'
 import { graphNodeTypes } from './nodes/nodeTypes'
 import { useGraphNodes } from './useGraphNodes'
@@ -90,10 +90,26 @@ export function NodeGraphEditor() {
   const contextMenuItems = contextMenu
     ? [
         {
-          label: 'Emitter Source',
-          sublabel: 'Seeds density, heat and fuel',
+          label: 'Scalar Emitter',
+          sublabel: 'Continuously injects density, heat and fuel',
           action: () => {
-            const id = addEmitter(`Emitter ${Date.now().toString(36).slice(-4)}`)
+            const id = addScalarEmitter(`Scalar ${Date.now().toString(36).slice(-4)}`)
+            setNodePosition(id, { x: contextMenu.flowX, y: contextMenu.flowY })
+          },
+        },
+        {
+          label: 'Velocity Emitter',
+          sublabel: 'Injects radial, directional or turbulent velocity',
+          action: () => {
+            const id = addVelocityEmitter(`Velocity ${Date.now().toString(36).slice(-4)}`)
+            setNodePosition(id, { x: contextMenu.flowX, y: contextMenu.flowY })
+          },
+        },
+        {
+          label: 'Igniter',
+          sublabel: 'Seeds the reaction field to ignite nearby fuel',
+          action: () => {
+            const id = addIgniterEmitter(`Igniter ${Date.now().toString(36).slice(-4)}`)
             setNodePosition(id, { x: contextMenu.flowX, y: contextMenu.flowY })
           },
         },

@@ -1,73 +1,67 @@
-import { createEmitter, createLight, type NewFilePreset } from './types'
+import { createScalarEmitter, createVelocityEmitter, createIgniterEmitter, createLight, type NewFilePreset } from './types'
 
-// Plinian volcanic eruption. Uses the long-blastDuration sustained emission
-// approach (same mechanism as campfire). The vent fires as a single tight,
-// very high-impulse source. The convective broadening and ash umbrella emerge
-// from the fluid dynamics — buoyancy + vorticity carry material upward and
-// the column naturally widens. A second wide low-impulse source adds
-// dense pyroclastic density current along the base.
 export const volcanicEruptionPreset: NewFilePreset = {
   id: 'volcanic-eruption',
   label: 'Volcanic Eruption',
   description: 'High-momentum Plinian vent column with a pyroclastic base surge.',
   emitters: [
-    // Main vent — sustained, high coreLift to drive material upward as a column.
-    // Low radialImpulse (it's not an explosion), very high liftImpulse.
-    createEmitter('Vent Column', {
-      position: [0.5, 0.058, 0.5],
-      radius: 0.052,
+    // Hot gas and ash from the vent.
+    createScalarEmitter('Vent Ejecta', {
+      positionX: 0.5, positionY: 0.055, positionZ: 0.5,
+      radius: 0.045,
       startTime: 0,
-      smokeLeadTime: 0,
-      blastDuration: 28,
-      plumeDuration: 60,
-      densityYield: 2.4,
-      heatYield: 14,
-      fuelYield: 3.8,
-      reactionYield: 1.4,
-      radialImpulse: 4.5,
-      liftDirection: [0, 1, 0],
-      liftImpulse: 18,
-      heatPatchiness: 0.38,
-      patchScale: 12,
-      coreHeat: 6.5,
-      coreLift: 32,
-      turbulence: 5.0,
-      crumbleStrength: 3.5,
-      implosionStrength: 0,
-      expansionRate: 0.32,
-      sustain: 3.8,
-      mushroomStrength: 0.15,
-      smokeEntrainment: 1.6,
+      duration: 9999,
+      densityRate: 3,
+      heatRate: 12,
+      fuelRate: 1.5,
+      noiseScale: 10,
+      noiseMix: 0.35,
       seed: 501,
     }),
-    // Pyroclastic surge — wide, dense, very low, nearly no heat.
-    // Fires after the vent establishes. Low impulse spreads radially outward.
-    createEmitter('Base Surge', {
-      position: [0.5, 0.052, 0.5],
-      radius: 0.11,
+    // Strong upward jet to drive the column.
+    createVelocityEmitter('Vent Jet', {
+      positionX: 0.5, positionY: 0.058, positionZ: 0.5,
+      radius: 0.038,
+      startTime: 0,
+      duration: 9999,
+      mode: 'directional',
+      speed: 60,
+      directionX: 0, directionY: 1, directionZ: 0,
+      falloff: 0.7,
+      seed: 509,
+    }),
+    // Wide dense pyroclastic surge along the ground.
+    createScalarEmitter('Base Surge', {
+      positionX: 0.5, positionY: 0.05, positionZ: 0.5,
+      radius: 0.12,
       startTime: 2.5,
-      smokeLeadTime: 0,
-      blastDuration: 26,
-      plumeDuration: 60,
-      densityYield: 2.0,
-      heatYield: 1.5,
-      fuelYield: 0.5,
-      reactionYield: 0.12,
-      radialImpulse: 3.5,
-      liftDirection: [0.03, 1, -0.02],
-      liftImpulse: 2.8,
-      heatPatchiness: 0.78,
-      patchScale: 28,
-      coreHeat: 0.4,
-      coreLift: 1.8,
-      turbulence: 5.5,
-      crumbleStrength: 3.8,
-      implosionStrength: 0,
-      expansionRate: 1.05,
-      sustain: 2.5,
-      mushroomStrength: 0.2,
-      smokeEntrainment: 1.0,
+      duration: 9999,
+      densityRate: 2.5,
+      heatRate: 0.8,
+      fuelRate: 0,
+      noiseScale: 24,
+      noiseMix: 0.75,
       seed: 523,
+    }),
+    // Radial shockwave of the surge spreading outward.
+    createVelocityEmitter('Surge Spread', {
+      positionX: 0.5, positionY: 0.052, positionZ: 0.5,
+      radius: 0.14,
+      startTime: 2.5,
+      duration: 4.0,
+      mode: 'radial',
+      speed: 18,
+      directionX: 0, directionY: 0, directionZ: 0,
+      falloff: 0.4,
+      seed: 541,
+    }),
+    createIgniterEmitter('Ignition', {
+      positionX: 0.5, positionY: 0.06, positionZ: 0.5,
+      radius: 0.05,
+      startTime: 0,
+      duration: 0.5,
+      intensity: 0.8,
+      seed: 557,
     }),
   ],
   lights: [

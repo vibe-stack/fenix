@@ -1,4 +1,4 @@
-import type { ExplosionSource } from '../../simulation/runtime/passes/explosionSources'
+import type { EmitterSource } from '../../simulation/emitters/emitterSource'
 import type { RenderLight } from '../../render/lighting/renderLight'
 
 export type RuntimeBackend = 'webgpu' | 'cpu-fallback'
@@ -26,7 +26,7 @@ export interface SimulationHandle {
   setBuoyancy(v: number): void
   setVorticityStrength(v: number): void
   setWorldSize(v: number): void
-  updateSources(sources: readonly ExplosionSource[]): void
+  updateSources(sources: readonly EmitterSource[]): void
   setRenderParams(params: { stepCount?: number; lights?: readonly RenderLight[]; scatteringForward?: number; scatteringBack?: number }): void
   /** Advance simulation by deltaSeconds and render a frame at the given time, used for offline export. */
   renderOffscreenFrame(elapsedSeconds: number, deltaSeconds: number): void
