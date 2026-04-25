@@ -44,7 +44,8 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   let index = flatten(id);
   let dt = params.deltaTime;
   let temperatureLift = temperatureField[index] * params.buoyancy;
-  let smokeWeight = densityField[index] * 0.55;
+  let smokeWeight = densityField[index] * 0.45;
+  let hotEntrainment = densityField[index] * smoothstep(0.06, 0.34, temperatureField[index]);
   let normalizedY = (f32(id.y) + 0.5) / f32(volumeInfo.height);
   let shear = sin(f32(id.y) * 0.073 + params.time * 0.9) * 0.35 +
     sin(f32(id.x) * 0.041 - f32(id.z) * 0.052 + params.time * 0.43) * 0.22;
@@ -82,7 +83,11 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   velocity += (-densityGradient / densityGradientLength) * surfaceBreakup * dt * 2.8;
   velocity += shredDirection * coldSmoke * dt * (0.72 + surfaceBreakup * 2.4);
   velocity += params.wind.xyz * coldSmoke * params.wind.w * dt * 0.9;
-  velocity.y = clamp(velocity.y + (temperatureLift - smokeWeight) * dt, -2.0, 8.0);
+  velocity.y = clamp(
+    velocity.y + (temperatureLift + hotEntrainment * params.buoyancy * 0.1 - smokeWeight) * dt,
+    -1.8,
+    9.0,
+  );
 
   if (id.x == 0u || id.x == volumeInfo.width - 1u || id.z == 0u || id.z == volumeInfo.depth - 1u) {
     velocity.x = 0.0;

@@ -37,6 +37,14 @@ export interface ExplosionSource {
   turbulence: number
   /** Early inward/outward shredding around cool smoke pockets. Good range: 4..24. */
   crumbleStrength: number
+  /** Inward suction after the detonation that can collapse the lower orb and feed the stem. */
+  implosionStrength?: number
+  /** Scales how fast the volume inflates while it rises. */
+  expansionRate?: number
+  /** Keeps source heat, fuel and smoke drag alive deeper into the plume phase. */
+  sustain?: number
+  /** Scales the toroidal circulation that forms the mushroom cap and stem. */
+  mushroomStrength?: number
   /** Per-source random seed for stable but non-identical patches. */
   seed: number
 }
@@ -689,7 +697,7 @@ export function packExplosionSources(sources: readonly ExplosionSource[]) {
       source.radialImpulse,
       source.turbulence,
       source.crumbleStrength,
-      0,
+      source.implosionStrength ?? 0,
     ], offset + 12)
     data.set([...source.liftDirection, source.liftImpulse], offset + 16)
     data.set([
@@ -698,12 +706,23 @@ export function packExplosionSources(sources: readonly ExplosionSource[]) {
       source.coreLift,
       source.heatPatchiness,
     ], offset + 20)
-    data.set([source.seed, 0, 0, 0], offset + 24)
+    data.set([
+      source.seed,
+      source.expansionRate ?? 1,
+      source.sustain ?? 0,
+      source.mushroomStrength ?? 1,
+    ], offset + 24)
   })
 
   return data
 }
 
-function source(source: ExplosionSource): ExplosionSource {
-  return source
+function source(sourceValue: ExplosionSource): ExplosionSource {
+  return {
+    implosionStrength: 0,
+    expansionRate: 1,
+    sustain: 0,
+    mushroomStrength: 1,
+    ...sourceValue,
+  }
 }

@@ -12,11 +12,15 @@ export interface EmitterNodeProps {
   liftImpulse: number       // post-blast plume velocity (0..30)
   turbulence: number        // lateral shell shredding (0..14)
   crumbleStrength: number   // inward shredding around cool pockets (0..24)
+  implosionStrength: number // inward pull that collapses the lower smoke body after detonation
   // Shape / noise
   heatPatchiness: number    // 0=uniform heat, 1=max patchy (0..1)
   patchScale: number        // noise frequency for breakup (1..24)
   coreHeat: number          // residual heat near updraft (0..0.8)
   coreLift: number          // narrow extra updraft force (0..24)
+  expansionRate: number     // scales how aggressively the hot gas volume expands over time
+  sustain: number           // keeps heat/fuel/updraft alive deeper into the plume phase
+  mushroomStrength: number  // strength of the toroidal mushroom circulation
   // Position
   positionX: number         // normalized 0..1
   positionY: number

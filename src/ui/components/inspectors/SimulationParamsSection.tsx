@@ -20,8 +20,8 @@ export function SimulationParamsSection() {
       <SliderRow
         label="Buoyancy"
         value={runtimeParams.buoyancy}
-        min={0}
-        max={8}
+        min={-8}
+        max={16}
         step={0.05}
         onChange={(v) => setParam('buoyancy', v)}
       />
@@ -29,7 +29,7 @@ export function SimulationParamsSection() {
         label="Vorticity"
         value={runtimeParams.vorticityStrength}
         min={0}
-        max={6}
+        max={16}
         step={0.05}
         onChange={(v) => setParam('vorticityStrength', v)}
       />
@@ -38,16 +38,16 @@ export function SimulationParamsSection() {
       <SliderRow
         label="Strength"
         value={runtimeParams.windStrength}
-        min={0}
-        max={8}
+        min={-8}
+        max={16}
         step={0.05}
         onChange={(v) => setParam('windStrength', v)}
       />
       <SliderRow
         label="X"
         value={runtimeParams.wind[0]}
-        min={-1}
-        max={1}
+        min={-4}
+        max={4}
         step={0.01}
         onChange={(v) =>
           dispatch({
@@ -59,8 +59,8 @@ export function SimulationParamsSection() {
       <SliderRow
         label="Y"
         value={runtimeParams.wind[1]}
-        min={-1}
-        max={1}
+        min={-4}
+        max={4}
         step={0.01}
         onChange={(v) =>
           dispatch({
@@ -72,8 +72,8 @@ export function SimulationParamsSection() {
       <SliderRow
         label="Z"
         value={runtimeParams.wind[2]}
-        min={-1}
-        max={1}
+        min={-4}
+        max={4}
         step={0.01}
         onChange={(v) =>
           dispatch({

@@ -10,7 +10,7 @@ export function CombustionNodeInspector() {
   const props = snap.combustion
 
   function set<K extends keyof CombustionNodeProps>(key: K, value: CombustionNodeProps[K]) {
-    (nodeStore.combustion as Record<string, unknown>)[key] = value
+    nodeStore.combustion[key] = value
   }
 
   return (

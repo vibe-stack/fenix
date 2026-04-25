@@ -25,6 +25,7 @@ export function NodeShell({
 
   return (
     <div
+      data-node-id={id}
       style={{
         background: 'var(--fenix-panel)',
         border: `1px solid ${isSelected ? accentColor : 'rgba(255,255,255,0.07)'}`,

@@ -2,6 +2,7 @@ import type { RendererDiagnostics } from '../../../engine/core/types/platform'
 import type { ViewportShadingMode } from '../../../editor/models/workspace'
 import { useEditorDispatch, useEditorStore } from '../../hooks/useEditorStore'
 import { BackgroundPopover } from './BackgroundPopover'
+import { NewFilePopover } from './NewFilePopover'
 
 interface TopToolbarProps {
   diagnostics: RendererDiagnostics
@@ -50,6 +51,10 @@ export function TopToolbar({ diagnostics }: TopToolbarProps) {
       </div>
 
       <div className="flex-1" />
+
+      <NewFilePopover />
+
+      <div className="h-4 w-px bg-(--fenix-bg)" />
 
       <BackgroundPopover />
 

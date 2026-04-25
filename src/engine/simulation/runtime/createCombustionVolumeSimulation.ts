@@ -170,8 +170,8 @@ export function createCombustionVolumeSimulation(
   let debugRequested = false
   let simulationStepIndex = 0
   const shouldRunDebugEachFrame = voxelCount < 1_800_000
-  let wind: [number, number, number] = options.wind ? [options.wind[0], options.wind[1], options.wind[2]] : [0.18, 0.0, -0.07]
-  let windStrength = options.windStrength ?? 0.74
+  let wind: [number, number, number] = options.wind ? [options.wind[0], options.wind[1], options.wind[2]] : [0, 0, 0]
+  let windStrength = options.windStrength ?? 0
   let buoyancy = 3.6
   let vorticityStrength = 2.15
 

@@ -25,6 +25,10 @@ function emittersToSources(): readonly ExplosionSource[] {
     coreLift: e.props.coreLift,
     turbulence: e.props.turbulence,
     crumbleStrength: e.props.crumbleStrength,
+    implosionStrength: e.props.implosionStrength,
+    expansionRate: e.props.expansionRate,
+    sustain: e.props.sustain,
+    mushroomStrength: e.props.mushroomStrength,
     seed: e.props.seed,
   }))
 }

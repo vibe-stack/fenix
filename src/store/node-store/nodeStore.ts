@@ -1,5 +1,10 @@
 import { proxy } from 'valtio'
-import { cinematicExplosionSources } from '../../engine/simulation/runtime/passes/explosionSources'
+import type { ExplosionSource } from '../../engine/simulation/runtime/passes/explosionSources'
+import {
+  defaultNewFilePresetId,
+  getNewFilePreset,
+  type NewFilePreset,
+} from '../../editor/presets/newFilePresets'
 import type { EmitterNodeProps, CombustionNodeProps, AdvectionNodeProps, RenderOutputNodeProps } from '../../engine/graph/schema/nodeProps'
 
 export type NodeType = 'emitter' | 'combustion' | 'advection' | 'render-output'
@@ -18,10 +23,10 @@ export interface NodeStoreState {
   renderOutput: RenderOutputNodeProps
 }
 
-function emitterFromSource(source: typeof cinematicExplosionSources[number], index: number): EmitterInstance {
+function emitterFromSource(source: ExplosionSource, index: number, label: string): EmitterInstance {
   return {
     id: `emitter-${index}`,
-    label: index === 0 ? 'Primary Detonation' : `Source ${index + 1}`,
+    label,
     props: {
       positionX: source.position[0],
       positionY: source.position[1],
@@ -42,19 +47,31 @@ function emitterFromSource(source: typeof cinematicExplosionSources[number], ind
       liftDirZ: source.liftDirection[2],
       turbulence: source.turbulence,
       crumbleStrength: source.crumbleStrength,
+      implosionStrength: source.implosionStrength ?? 0,
       heatPatchiness: source.heatPatchiness,
       patchScale: source.patchScale,
       coreHeat: source.coreHeat,
       coreLift: source.coreLift,
+      expansionRate: source.expansionRate ?? 1,
+      sustain: source.sustain ?? 0,
+      mushroomStrength: source.mushroomStrength ?? 1,
       seed: source.seed,
     },
   }
 }
 
+function emittersFromPreset(preset: NewFilePreset): EmitterInstance[] {
+  return preset.emitters.map((emitter, index) =>
+    emitterFromSource(emitter.source, index, emitter.label),
+  )
+}
+
+const defaultPreset = getNewFilePreset(defaultNewFilePresetId)
+
 export const nodeStore = proxy<NodeStoreState>({
   selectedId: null,
 
-  emitters: cinematicExplosionSources.map((s, i) => emitterFromSource(s, i)),
+  emitters: emittersFromPreset(defaultPreset),
 
   combustion: {
     burnRateMin: 4.2,
@@ -86,6 +103,12 @@ export const nodeStore = proxy<NodeStoreState>({
 
 let emitterCounter = nodeStore.emitters.length
 
+export function loadEmitterPreset(preset: NewFilePreset) {
+  nodeStore.selectedId = null
+  nodeStore.emitters = emittersFromPreset(preset)
+  emitterCounter = nodeStore.emitters.length
+}
+
 export function addEmitter(label: string): string {
   const id = `emitter-${emitterCounter++}`
   nodeStore.emitters.push({
@@ -107,10 +130,14 @@ export function addEmitter(label: string): string {
       liftDirX: 0, liftDirY: 1, liftDirZ: 0,
       turbulence: 4,
       crumbleStrength: 6,
+      implosionStrength: 0,
       heatPatchiness: 0.6,
       patchScale: 8,
       coreHeat: 0.3,
       coreLift: 8,
+      expansionRate: 1,
+      sustain: 0,
+      mushroomStrength: 1,
       seed: Math.floor(Math.random() * 65536),
     },
   })

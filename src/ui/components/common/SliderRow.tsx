@@ -23,9 +23,21 @@ export function SliderRow({ label, value, min, max, step = 0.01, decimals = 2, o
         onChange={(e) => onChange(Number(e.target.value))}
         className="h-0.5 flex-1 cursor-pointer appearance-none bg-(--fenix-row) accent-(--fenix-accent)"
       />
-      <span className="w-10 shrink-0 text-right text-[10px] tabular-nums text-(--fenix-text)">
-        {value.toFixed(decimals)}
-      </span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={value.toFixed(decimals)}
+        onChange={(e) => {
+          const nextValue = Number(e.target.value)
+          if (!Number.isFinite(nextValue)) {
+            return
+          }
+          onChange(Math.max(min, Math.min(max, nextValue)))
+        }}
+        className="w-20 shrink-0 rounded border border-(--fenix-row) bg-(--fenix-panel) px-2 py-1 text-right text-[11px] tabular-nums text-(--fenix-text) outline-none focus:border-(--fenix-accent)"
+      />
     </div>
   )
 }
