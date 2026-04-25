@@ -43,7 +43,7 @@ export class SourceInjectionPass {
     this.currentSourceCount = initialSources.length
     this.sourceBuffer = device.createBuffer({
       label: 'combustion-sources',
-      size: Math.max(sourceData.byteLength, 112), // 7 vec4s per source; keep min allocation for empty lists
+      size: Math.max(sourceData.byteLength, 128), // 8 vec4s per source; keep min allocation for empty lists
       usage: GPU_BUFFER_STORAGE | GPU_BUFFER_COPY_DST,
     })
     device.queue.writeBuffer(this.sourceBuffer, 0, sourceData)
@@ -59,7 +59,7 @@ export class SourceInjectionPass {
       this.sourceBuffer.destroy()
       this.sourceBuffer = this.device.createBuffer({
         label: 'combustion-sources',
-        size: Math.max(sourceData.byteLength, 112),
+        size: Math.max(sourceData.byteLength, 128),
         usage: GPU_BUFFER_STORAGE | GPU_BUFFER_COPY_DST,
       })
       this.currentSourceCount = sources.length

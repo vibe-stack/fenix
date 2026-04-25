@@ -6,7 +6,7 @@ import {
   type NewFilePresetId,
 } from '../../../editor/presets/newFilePresets'
 import { useSimulationHandle } from '../../../features/viewport/SimulationHandleContext'
-import { loadEmitterPreset } from '../../../store/node-store/nodeStore'
+import { loadEmitterPreset, loadLightPreset, nodeStore } from '../../../store/node-store/nodeStore'
 import { resetNodeGraph } from '../../../store/node-store/nodeGraphStore'
 import { useEditorDispatch } from '../../hooks/useEditorStore'
 
@@ -19,7 +19,15 @@ export function NewFilePopover() {
     const preset = getNewFilePreset(presetId)
 
     loadEmitterPreset(preset)
-    resetNodeGraph(preset.emitters.length)
+    loadLightPreset(preset)
+    resetNodeGraph(preset.emitters.length, preset.lights.length)
+    Object.assign(nodeStore.renderOutput, {
+      displayMode: 'temperature',
+      stepCount: 400,
+      scatteringForward: 0.32,
+      scatteringBack: -0.18,
+      ...preset.renderOutput,
+    })
     dispatch({
       type: 'simulation/set-runtime-params',
       params: clonePresetRuntimeParams(preset),

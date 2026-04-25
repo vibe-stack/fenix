@@ -21,6 +21,7 @@ export interface EmitterNodeProps {
   expansionRate: number     // scales how aggressively the hot gas volume expands over time
   sustain: number           // keeps heat/fuel/updraft alive deeper into the plume phase
   mushroomStrength: number  // strength of the toroidal mushroom circulation
+  smokeEntrainment: number  // how strongly the rising core drags surrounding smoke upward
   // Position
   positionX: number         // normalized 0..1
   positionY: number
@@ -61,12 +62,23 @@ export interface AdvectionNodeProps {
   mode: 'maccormack' | 'semi-lagrangian'
 }
 
+export interface LightNodeProps {
+  lightType: 'directional' | 'point'
+  dirX: number
+  dirY: number
+  dirZ: number
+  posX: number
+  posY: number
+  posZ: number
+  intensity: number
+  colorR: number
+  colorG: number
+  colorB: number
+}
+
 export interface RenderOutputNodeProps {
   displayMode: 'temperature' | 'density' | 'fuel'
   stepCount: number          // raymarch steps (64..512)
-  lightDirX: number          // light direction X (-1..1)
-  lightDirY: number
-  lightDirZ: number
   scatteringForward: number  // Henyey-Greenstein g forward (0..0.95)
   scatteringBack: number     // H-G g backward (-0.95..0)
 }
@@ -76,6 +88,7 @@ export type NodePropsMap = {
   'emitter-source': EmitterNodeProps
   'combustion': CombustionNodeProps
   'advection': AdvectionNodeProps
+  'light': LightNodeProps
   'render-output': RenderOutputNodeProps
 }
 

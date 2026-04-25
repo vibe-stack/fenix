@@ -45,10 +45,10 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
       readMagnitude(vec3<u32>(id.x, id.y, dec(id.z))),
   ) * 0.5;
   let direction = gradient / max(length(gradient), 0.0001);
-  let force = cross(direction, vorticityField[index].xyz) * params.vorticityStrength;
+  let force = cross(direction, vorticityField[index].xyz) * params.vorticityStrength * 1.45;
   var velocity = velocityField[index].xyz + force * params.deltaTime;
 
-  velocity = clamp(velocity, vec3<f32>(-8.0), vec3<f32>(8.0));
+  velocity = clamp(velocity, vec3<f32>(-12.0), vec3<f32>(12.0));
   velocityField[index] = vec4<f32>(velocity, 0.0);
   confinementMagnitudeField[index] = length(force);
 }

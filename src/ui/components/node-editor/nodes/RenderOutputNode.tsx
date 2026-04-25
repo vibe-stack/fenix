@@ -1,10 +1,13 @@
 import type { NodeProps } from '@xyflow/react'
 import { useSnapshot } from 'valtio'
 import { nodeStore } from '../../../../store/node-store/nodeStore'
+import { nodeGraphStore } from '../../../../store/node-store/nodeGraphStore'
 import { NodeShell } from './NodeShell'
 
 export function RenderOutputNode({ id, selected }: NodeProps) {
   const snap = useSnapshot(nodeStore)
+  const graphSnap = useSnapshot(nodeGraphStore)
+  const connectedLights = graphSnap.edges.filter((edge) => edge.target === 'render-output' && edge.source.startsWith('light-')).length
 
   return (
     <NodeShell
@@ -18,6 +21,7 @@ export function RenderOutputNode({ id, selected }: NodeProps) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <PropRow label="display" value={snap.renderOutput.displayMode} />
         <PropRow label="steps" value={String(snap.renderOutput.stepCount)} />
+        <PropRow label="lights" value={String(connectedLights)} />
       </div>
     </NodeShell>
   )

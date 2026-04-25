@@ -84,9 +84,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   velocity += shredDirection * coldSmoke * dt * (0.72 + surfaceBreakup * 2.4);
   velocity += params.wind.xyz * coldSmoke * params.wind.w * dt * 0.9;
   velocity.y = clamp(
-    velocity.y + (temperatureLift + hotEntrainment * params.buoyancy * 0.1 - smokeWeight) * dt,
+    velocity.y + (temperatureLift + hotEntrainment * params.buoyancy * 0.18 - smokeWeight) * dt,
     -1.8,
-    9.0,
+    12.0,
   );
 
   if (id.x == 0u || id.x == volumeInfo.width - 1u || id.z == 0u || id.z == volumeInfo.depth - 1u) {

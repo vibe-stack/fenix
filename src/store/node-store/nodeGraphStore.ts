@@ -54,31 +54,50 @@ function createEmitterPositions(emitterCount: number): Record<string, XYPosition
   )
 }
 
-function createGraphState(emitterCount: number): NodeGraphStoreState {
+function createLightPositions(lightCount: number): Record<string, XYPosition> {
+  return Object.fromEntries(
+    Array.from({ length: lightCount }, (_, index) => [
+      `light-${index}`,
+      {
+        x: 610,
+        y: 68 + index * 112,
+      },
+    ]),
+  )
+}
+
+function createGraphState(emitterCount: number, lightCount: number): NodeGraphStoreState {
   const emitterEdges = Array.from({ length: emitterCount }, (_, index) => ({
     id: `emitter-${index}->combustion`,
     source: `emitter-${index}`,
     target: 'combustion',
   }))
+  const lightEdges = Array.from({ length: lightCount }, (_, index) => ({
+    id: `light-${index}->render-output`,
+    source: `light-${index}`,
+    target: 'render-output',
+  }))
 
   return {
     nodePositions: {
       ...createEmitterPositions(emitterCount),
+      ...createLightPositions(lightCount),
       ...fixedNodePositions,
     },
-    edges: [...emitterEdges, ...fixedEdges],
+    edges: [...emitterEdges, ...lightEdges, ...fixedEdges],
   }
 }
 
-const defaultGraphState = createGraphState(getNewFilePreset(defaultNewFilePresetId).emitters.length)
+const defaultPreset = getNewFilePreset(defaultNewFilePresetId)
+const defaultGraphState = createGraphState(defaultPreset.emitters.length, defaultPreset.lights.length)
 
 export const nodeGraphStore = proxy<NodeGraphStoreState>({
   nodePositions: defaultGraphState.nodePositions,
   edges: defaultGraphState.edges,
 })
 
-export function resetNodeGraph(emitterCount: number) {
-  const nextState = createGraphState(emitterCount)
+export function resetNodeGraph(emitterCount: number, lightCount: number) {
+  const nextState = createGraphState(emitterCount, lightCount)
 
   nodeGraphStore.nodePositions = nextState.nodePositions
   nodeGraphStore.edges = nextState.edges

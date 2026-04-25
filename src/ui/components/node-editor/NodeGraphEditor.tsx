@@ -12,7 +12,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { nodeStore } from '../../../store/node-store/nodeStore'
-import { addEmitter, removeEmitter } from '../../../store/node-store/nodeStore'
+import { addEmitter, addLight, removeEmitter, removeLight } from '../../../store/node-store/nodeStore'
 import { addEdge, removeEdges, removeNodeFromGraph, setNodePosition } from '../../../store/node-store/nodeGraphStore'
 import { graphNodeTypes } from './nodes/nodeTypes'
 import { useGraphNodes } from './useGraphNodes'
@@ -67,7 +67,11 @@ export function NodeGraphEditor() {
     if (e.key !== 'Backspace' && e.key !== 'Delete') return
     const id = nodeStore.selectedId
     if (!id || FIXED_NODE_IDS.has(id)) return
-    removeEmitter(id)
+    if (id.startsWith('light-')) {
+      removeLight(id)
+    } else {
+      removeEmitter(id)
+    }
     removeNodeFromGraph(id)
   }, [])
 
@@ -91,6 +95,15 @@ export function NodeGraphEditor() {
           action: () => {
             const id = addEmitter(`Emitter ${Date.now().toString(36).slice(-4)}`)
             setNodePosition(id, { x: contextMenu.flowX, y: contextMenu.flowY })
+          },
+        },
+        {
+          label: 'Light',
+          sublabel: 'Directional viewport light with color and intensity',
+          action: () => {
+            const id = addLight(`Light ${Date.now().toString(36).slice(-4)}`)
+            setNodePosition(id, { x: contextMenu.flowX, y: contextMenu.flowY })
+            addEdge({ id: `${id}->render-output`, source: id, target: 'render-output' })
           },
         },
       ]

@@ -29,6 +29,7 @@ function emittersToSources(): readonly ExplosionSource[] {
     expansionRate: e.props.expansionRate,
     sustain: e.props.sustain,
     mushroomStrength: e.props.mushroomStrength,
+    smokeEntrainment: e.props.smokeEntrainment,
     seed: e.props.seed,
   }))
 }

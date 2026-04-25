@@ -5,9 +5,9 @@ import {
   getNewFilePreset,
   type NewFilePreset,
 } from '../../editor/presets/newFilePresets'
-import type { EmitterNodeProps, CombustionNodeProps, AdvectionNodeProps, RenderOutputNodeProps } from '../../engine/graph/schema/nodeProps'
+import type { EmitterNodeProps, CombustionNodeProps, AdvectionNodeProps, LightNodeProps, RenderOutputNodeProps } from '../../engine/graph/schema/nodeProps'
 
-export type NodeType = 'emitter' | 'combustion' | 'advection' | 'render-output'
+export type NodeType = 'emitter' | 'combustion' | 'advection' | 'light' | 'render-output'
 
 export interface EmitterInstance {
   id: string
@@ -15,9 +15,16 @@ export interface EmitterInstance {
   props: EmitterNodeProps
 }
 
+export interface LightInstance {
+  id: string
+  label: string
+  props: LightNodeProps
+}
+
 export interface NodeStoreState {
   selectedId: string | null
   emitters: EmitterInstance[]
+  lights: LightInstance[]
   combustion: CombustionNodeProps
   advection: AdvectionNodeProps
   renderOutput: RenderOutputNodeProps
@@ -55,8 +62,17 @@ function emitterFromSource(source: ExplosionSource, index: number, label: string
       expansionRate: source.expansionRate ?? 1,
       sustain: source.sustain ?? 0,
       mushroomStrength: source.mushroomStrength ?? 1,
+      smokeEntrainment: source.smokeEntrainment ?? 1,
       seed: source.seed,
     },
+  }
+}
+
+function lightFromPreset(light: NewFilePreset['lights'][number], index: number): LightInstance {
+  return {
+    id: `light-${index}`,
+    label: light.label,
+    props: { ...light.props },
   }
 }
 
@@ -66,12 +82,23 @@ function emittersFromPreset(preset: NewFilePreset): EmitterInstance[] {
   )
 }
 
+function lightsFromPreset(preset: NewFilePreset): LightInstance[] {
+  return preset.lights.map((light, index) => lightFromPreset(light, index))
+}
+
 const defaultPreset = getNewFilePreset(defaultNewFilePresetId)
+const defaultRenderOutput = {
+  displayMode: 'temperature' as const,
+  stepCount: 400,
+  scatteringForward: 0.32,
+  scatteringBack: -0.18,
+}
 
 export const nodeStore = proxy<NodeStoreState>({
   selectedId: null,
 
   emitters: emittersFromPreset(defaultPreset),
+  lights: lightsFromPreset(defaultPreset),
 
   combustion: {
     burnRateMin: 4.2,
@@ -91,22 +118,24 @@ export const nodeStore = proxy<NodeStoreState>({
   },
 
   renderOutput: {
-    displayMode: 'temperature',
-    stepCount: 400,
-    lightDirX: -0.34,
-    lightDirY: 0.88,
-    lightDirZ: 0.31,
-    scatteringForward: 0.32,
-    scatteringBack: -0.18,
+    ...defaultRenderOutput,
+    ...defaultPreset.renderOutput,
   },
 })
 
 let emitterCounter = nodeStore.emitters.length
+let lightCounter = nodeStore.lights.length
 
 export function loadEmitterPreset(preset: NewFilePreset) {
   nodeStore.selectedId = null
   nodeStore.emitters = emittersFromPreset(preset)
   emitterCounter = nodeStore.emitters.length
+}
+
+export function loadLightPreset(preset: NewFilePreset) {
+  nodeStore.selectedId = null
+  nodeStore.lights = lightsFromPreset(preset)
+  lightCounter = nodeStore.lights.length
 }
 
 export function addEmitter(label: string): string {
@@ -138,7 +167,30 @@ export function addEmitter(label: string): string {
       expansionRate: 1,
       sustain: 0,
       mushroomStrength: 1,
+      smokeEntrainment: 1,
       seed: Math.floor(Math.random() * 65536),
+    },
+  })
+  return id
+}
+
+export function addLight(label: string): string {
+  const id = `light-${lightCounter++}`
+  nodeStore.lights.push({
+    id,
+    label,
+    props: {
+      lightType: 'directional',
+      dirX: -0.34,
+      dirY: 0.88,
+      dirZ: 0.31,
+      posX: 0.5,
+      posY: 0.4,
+      posZ: 0.5,
+      intensity: 1.2,
+      colorR: 1,
+      colorG: 0.94,
+      colorB: 0.88,
     },
   })
   return id
@@ -154,9 +206,20 @@ export function removeEmitter(id: string) {
   }
 }
 
+export function removeLight(id: string) {
+  const idx = nodeStore.lights.findIndex((light) => light.id === id)
+  if (idx !== -1) {
+    nodeStore.lights.splice(idx, 1)
+  }
+  if (nodeStore.selectedId === id) {
+    nodeStore.selectedId = null
+  }
+}
+
 // Helpers for working with selected node
 export type SelectedKind =
   | { kind: 'emitter'; instance: EmitterInstance }
+  | { kind: 'light'; instance: LightInstance }
   | { kind: 'combustion' }
   | { kind: 'advection' }
   | { kind: 'render-output' }
@@ -170,5 +233,7 @@ export function resolveSelected(store: NodeStoreState): SelectedKind {
   if (id === 'render-output') return { kind: 'render-output' }
   const instance = store.emitters.find((e) => e.id === id)
   if (instance) return { kind: 'emitter', instance }
+  const light = store.lights.find((entry) => entry.id === id)
+  if (light) return { kind: 'light', instance: light }
   return null
 }

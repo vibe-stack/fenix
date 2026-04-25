@@ -21,6 +21,7 @@ struct ExplosionSource {
   lift: vec4<f32>,
   shape: vec4<f32>,
   random: vec4<f32>,
+  behavior: vec4<f32>,
 }
 
 @group(0) @binding(2) var<storage, read> explosionSources: array<ExplosionSource>;
@@ -142,6 +143,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let sustain = max(blastSource.random.z, 0.0);
     let mushroomStrength = max(blastSource.random.w, 0.0);
     let implosionStrength = max(blastSource.impulse.w, 0.0);
+    let smokeEntrainment = max(blastSource.behavior.x, 0.0);
     let smokeExpansion = smoothstep(0.0, 1.0, clamp(age / max(smokeLeadTime, 0.001), 0.0, 1.0));
     let blastExpansion = smoothstep(0.0, 0.78, blastAge);
     let plumeExpansion = smoothstep(0.0, 1.0, plumeAge);
@@ -217,7 +219,11 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         (1.0 - smoothstep(0.96, 1.7, distanceRatio)) *
         smoothstep(0.55, -0.45, liftProgress);
       let implosionPull = implosionGate * implosionBand * implosionStrength;
-      let smokeDrag = max(coolingSmoke, sootInCore * 0.55) * (0.1 + sustain * 0.08 + mushroomStrength * 0.08);
+      let smokeDrag = max(coolingSmoke, sootInCore * 0.7) *
+        (0.14 + sustain * 0.14 + mushroomStrength * 0.18 + smokeEntrainment * 0.22);
+      let entrainedSmokeLift = max(coolingSmoke, sootInCore) *
+        (smokeEntrainment * 0.55 + sustain * 0.12) *
+        (flashPulse * 0.55 + plumeGate * (1.0 - plumeAge) * 0.92 + sustainLift * 0.85);
       let radialPatch = smoothstep(0.42, 0.98, detailNoise) * shock;
       let crumblePocket = smoothstep(0.42, 0.92, 1.0 - heatMask + detailNoise * 0.22) *
         core *
@@ -235,7 +241,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
       // Toroidal circulation that sculpts the mushroom: base smoke is sucked inward
       // and up, cap smoke spreads outward.  Scaled by liftImpulse so users control it.
       let toroid = toroidalVelocity(offset, liftDirection, radius, axisRatio, liftProgress, distanceRatio);
-      let toroidStrength = coreFireProgress * liftImpulse * (0.18 + mushroomStrength * 0.16) *
+      let toroidStrength = coreFireProgress * liftImpulse * (0.35 + mushroomStrength * 0.42) *
         smoothstep(0.0, 0.15, distanceRatio);  // zero exactly at center to avoid instability
 
       // Pre-smoke is forcefully cleared from the hot interior and the rising column.
@@ -252,7 +258,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
       density = clamp01(max(0.0, density
           - heatVent * params.deltaTime * 11.0
-          - columnClear * params.deltaTime * (6.0 + implosionStrength * 0.08)) +
+          - columnClear * params.deltaTime * (6.0 + implosionStrength * 0.08 + smokeEntrainment * 0.5)) +
         smokeRelease * blastSource.yields.x * params.deltaTime);
       temperature = clamp01(temperature + (hotFlash * 1.12 + updraftCore * blastSource.shape.y * 0.05 + sustainLift * sustain * plumeHeatMask * 0.02) *
         blastSource.yields.y * params.deltaTime);
@@ -264,8 +270,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
       velocity += curlKick * updraftCore * (1.0 - plumeHeatMask) * blastSource.impulse.z * params.deltaTime * 0.32;
       velocity += direction * coolingSmoke * blastSource.impulse.x * params.deltaTime * 0.18;
       velocity += params.wind.xyz * coolingSmoke * params.wind.w * params.deltaTime * 0.9;
-      velocity += liftDirection * (core * liftImpulse * (flashPulse * 0.32 + plumeGate * (1.0 - plumeAge) * 0.36) +
-        updraftCore * blastSource.shape.z * 0.26 + coolingSmoke * liftImpulse * 0.12 + smokeDrag * liftImpulse * 0.18) * params.deltaTime;
+      velocity += liftDirection * (core * liftImpulse * (flashPulse * 0.85 + plumeGate * (1.0 - plumeAge) * 1.08) +
+        updraftCore * blastSource.shape.z * 0.82 + coolingSmoke * liftImpulse * 0.28 + smokeDrag * liftImpulse * 0.52 +
+        entrainedSmokeLift * (liftImpulse * 0.42 + blastSource.impulse.x * 0.06 + blastSource.shape.z * 0.4)) * params.deltaTime;
       velocity += -direction * implosionPull * params.deltaTime;
       // Toroidal mushroom circulation — this is what pulls the base smoke ring inward
       // and fans the cap outward.  Applied during and after the blast fires.

@@ -1,13 +1,12 @@
 import type { OrbitCameraSnapshot } from '../../scene/camera/createOrbitCameraController'
 import type { CombustionVolumeRenderBuffers } from '../../simulation/common/combustionVolumeRenderBuffers'
 import type { VolumeResolution } from '../../simulation/common/volumeResolution'
+import { MAX_RENDER_LIGHTS, type RenderLight } from '../lighting/renderLight'
 import type { VolumeDisplayMode } from '../volumetrics/volumeDisplayMode'
 
 export interface RaymarchRenderParams {
   stepCount?: number
-  lightDirX?: number
-  lightDirY?: number
-  lightDirZ?: number
+  lights?: readonly RenderLight[]
   scatteringForward?: number
   scatteringBack?: number
 }
@@ -29,7 +28,35 @@ export interface VolumeRaymarchPass {
 
 const GPU_BUFFER_UNIFORM = 0x0040
 const GPU_BUFFER_COPY_DST = 0x0008
-const CAMERA_DATA_FLOATS = 44
+const LIGHT_DATA_FLOATS = MAX_RENDER_LIGHTS * 12
+const CAMERA_DATA_FLOATS = 44 + LIGHT_DATA_FLOATS
+
+const DEFAULT_LIGHT_DIRECTION: readonly [number, number, number] = [-0.34, 0.88, 0.31]
+
+function sanitizeRenderLights(inputLights: readonly RenderLight[]): RenderLight[] {
+  const nextLights = inputLights
+    .slice(0, MAX_RENDER_LIGHTS)
+    .map((light) => {
+      const directionLength = Math.hypot(light.direction[0], light.direction[1], light.direction[2])
+      const direction = directionLength > 0.0001
+        ? [light.direction[0] / directionLength, light.direction[1] / directionLength, light.direction[2] / directionLength] as const
+        : DEFAULT_LIGHT_DIRECTION
+
+      return {
+        type: light.type,
+        direction,
+        position: [light.position[0], light.position[1], light.position[2]] as const,
+        color: [
+          Math.max(light.color[0], 0),
+          Math.max(light.color[1], 0),
+          Math.max(light.color[2], 0),
+        ] as const,
+        intensity: Math.max(light.intensity, 0),
+      }
+    })
+
+  return nextLights
+}
 
 export function createVolumeRaymarchPass(
   device: GPUDevice,
@@ -47,9 +74,7 @@ export function createVolumeRaymarchPass(
   const voxelCount = resolution.width * resolution.height * resolution.depth
   const defaultStepCount = voxelCount >= 4_000_000 ? 200 : voxelCount >= 1_800_000 ? 400 : 180
   let stepCount = defaultStepCount
-  let lightDirX = -0.34
-  let lightDirY = 0.88
-  let lightDirZ = 0.31
+  let lights: RenderLight[] = []
   let scatteringForward = 0.32
   let scatteringBack = -0.18
   const cameraBuffer = device.createBuffer({
@@ -191,16 +216,38 @@ export function createVolumeRaymarchPass(
       cameraData[33] = camera.target.y
       cameraData[34] = camera.target.z
       cameraData[35] = 0
-      // lightDir vec4
-      cameraData[36] = lightDirX
-      cameraData[37] = lightDirY
-      cameraData[38] = lightDirZ
+      // reserved vec4
+      cameraData[36] = 0
+      cameraData[37] = 0
+      cameraData[38] = 0
       cameraData[39] = 0
-      // scatter vec4
+      // scatter vec4, z = active light count
       cameraData[40] = scatteringForward
       cameraData[41] = scatteringBack
-      cameraData[42] = 0
+      cameraData[42] = lights.length
       cameraData[43] = 0
+
+      for (let lightIndex = 0; lightIndex < MAX_RENDER_LIGHTS; lightIndex += 1) {
+        const baseOffset = 44 + lightIndex * 12
+        const light = lights[lightIndex]
+
+        if (light) {
+          cameraData[baseOffset] = light.direction[0]
+          cameraData[baseOffset + 1] = light.direction[1]
+          cameraData[baseOffset + 2] = light.direction[2]
+          cameraData[baseOffset + 3] = light.type === 'point' ? 1 : 0
+          cameraData[baseOffset + 4] = light.position[0]
+          cameraData[baseOffset + 5] = light.position[1]
+          cameraData[baseOffset + 6] = light.position[2]
+          cameraData[baseOffset + 7] = light.intensity
+          cameraData[baseOffset + 8] = light.color[0]
+          cameraData[baseOffset + 9] = light.color[1]
+          cameraData[baseOffset + 10] = light.color[2]
+          cameraData[baseOffset + 11] = 0
+        } else {
+          cameraData.fill(0, baseOffset, baseOffset + 12)
+        }
+      }
 
       device.queue.writeBuffer(cameraBuffer, 0, cameraData)
 
@@ -223,9 +270,7 @@ export function createVolumeRaymarchPass(
     },
     setRenderParams(params) {
       if (params.stepCount !== undefined) stepCount = params.stepCount
-      if (params.lightDirX !== undefined) lightDirX = params.lightDirX
-      if (params.lightDirY !== undefined) lightDirY = params.lightDirY
-      if (params.lightDirZ !== undefined) lightDirZ = params.lightDirZ
+      if (params.lights !== undefined) lights = sanitizeRenderLights(params.lights)
       if (params.scatteringForward !== undefined) scatteringForward = params.scatteringForward
       if (params.scatteringBack !== undefined) scatteringBack = params.scatteringBack
     },
@@ -238,6 +283,12 @@ export function createVolumeRaymarchPass(
 
 function createVolumeRaymarchShader() {
   return /* wgsl */ `
+    struct RenderLightData {
+      directionType: vec4<f32>,
+      positionIntensity: vec4<f32>,
+      color: vec4<f32>,
+    }
+
     struct CameraData {
       position: vec4<f32>,
       right: vec4<f32>,
@@ -248,8 +299,302 @@ function createVolumeRaymarchShader() {
       renderInfo: vec4<f32>,
       renderMode: vec4<f32>,
       focalPoint: vec4<f32>,
-      lightDir: vec4<f32>,
+      padding: vec4<f32>,
       scatter: vec4<f32>,
+      lights: array<RenderLightData, ${MAX_RENDER_LIGHTS}>,
+    }
+
+    struct ResolutionData {
+      width: f32,
+      height: f32,
+      depth: f32,
+      padding: f32,
+    }
+
+    struct BrickInfo {
+      counts: vec4<u32>,
+      params: vec4<u32>,
+    }
+
+    struct VertexOutput {
+      @builtin(position) position: vec4<f32>,
+      @location(0) uv: vec2<f32>,
+    }
+
+    // All 4 fields packed so one trilinear pass reads everything at once
+    struct VoxelSample {
+      density: f32,
+      temperature: f32,
+      fuel: f32,
+      reaction: f32,
+    }
+
+    @group(0) @binding(0) var<uniform> camera: CameraData;
+    @group(0) @binding(1) var<uniform> resolution: ResolutionData;
+    @group(0) @binding(2) var<storage, read> densityField: array<f32>;
+    @group(0) @binding(3) var<storage, read> temperatureField: array<f32>;
+    @group(0) @binding(4) var<storage, read> fuelField: array<f32>;
+    @group(0) @binding(5) var<storage, read> reactionField: array<f32>;
+    @group(0) @binding(6) var<storage, read> activeBrickFlags: array<u32>;
+    @group(0) @binding(7) var<uniform> brickInfo: BrickInfo;
+
+    fn sampleBounds() -> vec3<f32> {
+      return vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0);
+    }
+
+    fn brickSizeU() -> u32 {
+      return max(brickInfo.params.x, 1u);
+    }
+
+    fn activeBrickIndexForCoord(coord: vec3<u32>) -> u32 {
+      let brickCoord = min(coord / vec3<u32>(brickSizeU()), brickInfo.counts.xyz - vec3<u32>(1u));
+      return brickCoord.x + brickInfo.counts.x * (brickCoord.y + brickInfo.counts.y * brickCoord.z);
+    }
+
+    fn flatten(coord: vec3<u32>) -> u32 {
+      return coord.x + u32(resolution.width) * (coord.y + u32(resolution.height) * coord.z);
+    }
+
+    fn isActiveSample(position: vec3<f32>) -> bool {
+      let coord = vec3<u32>(floor(clamp(position, vec3<f32>(0.0), sampleBounds())));
+      return activeBrickFlags[activeBrickIndexForCoord(coord)] != 0u;
+    }
+
+    fn voxelDistToNextBrick(voxPos: vec3<f32>, voxRayDir: vec3<f32>) -> f32 {
+      let far = 1e9;
+      let brickExtent = f32(brickSizeU());
+      let brickCoord = floor(voxPos / brickExtent);
+      let boundary = vec3<f32>(
+        select(brickCoord.x * brickExtent, (brickCoord.x + 1.0) * brickExtent, voxRayDir.x > 0.0),
+        select(brickCoord.y * brickExtent, (brickCoord.y + 1.0) * brickExtent, voxRayDir.y > 0.0),
+        select(brickCoord.z * brickExtent, (brickCoord.z + 1.0) * brickExtent, voxRayDir.z > 0.0),
+      );
+      let tx = select(far, (boundary.x - voxPos.x) / voxRayDir.x, abs(voxRayDir.x) > 0.00001);
+      let ty = select(far, (boundary.y - voxPos.y) / voxRayDir.y, abs(voxRayDir.y) > 0.00001);
+      let tz = select(far, (boundary.z - voxPos.z) / voxRayDir.z, abs(voxRayDir.z) > 0.00001);
+      return min(tx, min(ty, tz)) * length(voxRayDir) + 0.5;
+    }
+
+    fn sampleAllFields(position: vec3<f32>) -> VoxelSample {
+      let dims = sampleBounds();
+      let clamped = clamp(position, vec3<f32>(0.0), dims);
+      let base = vec3<u32>(floor(clamped));
+      let upper = min(base + vec3<u32>(1u), vec3<u32>(dims));
+      let f = fract(clamped);
+
+      let i000 = flatten(base);
+      let i100 = flatten(vec3<u32>(upper.x, base.y, base.z));
+      let i010 = flatten(vec3<u32>(base.x, upper.y, base.z));
+      let i110 = flatten(vec3<u32>(upper.x, upper.y, base.z));
+      let i001 = flatten(vec3<u32>(base.x, base.y, upper.z));
+      let i101 = flatten(vec3<u32>(upper.x, base.y, upper.z));
+      let i011 = flatten(vec3<u32>(base.x, upper.y, upper.z));
+      let i111 = flatten(upper);
+
+      var s: VoxelSample;
+
+      let d_x00 = mix(densityField[i000], densityField[i100], f.x);
+      let d_x10 = mix(densityField[i010], densityField[i110], f.x);
+      let d_x01 = mix(densityField[i001], densityField[i101], f.x);
+      let d_x11 = mix(densityField[i011], densityField[i111], f.x);
+      s.density = mix(mix(d_x00, d_x10, f.y), mix(d_x01, d_x11, f.y), f.z);
+
+      let t_x00 = mix(temperatureField[i000], temperatureField[i100], f.x);
+      let t_x10 = mix(temperatureField[i010], temperatureField[i110], f.x);
+      let t_x01 = mix(temperatureField[i001], temperatureField[i101], f.x);
+      let t_x11 = mix(temperatureField[i011], temperatureField[i111], f.x);
+      s.temperature = mix(mix(t_x00, t_x10, f.y), mix(t_x01, t_x11, f.y), f.z);
+
+      let fu_x00 = mix(fuelField[i000], fuelField[i100], f.x);
+      let fu_x10 = mix(fuelField[i010], fuelField[i110], f.x);
+      let fu_x01 = mix(fuelField[i001], fuelField[i101], f.x);
+      let fu_x11 = mix(fuelField[i011], fuelField[i111], f.x);
+      s.fuel = mix(mix(fu_x00, fu_x10, f.y), mix(fu_x01, fu_x11, f.y), f.z);
+
+      let r_x00 = mix(reactionField[i000], reactionField[i100], f.x);
+      let r_x10 = mix(reactionField[i010], reactionField[i110], f.x);
+      let r_x01 = mix(reactionField[i001], reactionField[i101], f.x);
+      let r_x11 = mix(reactionField[i011], reactionField[i111], f.x);
+      s.reaction = mix(mix(r_x00, r_x10, f.y), mix(r_x01, r_x11, f.y), f.z);
+
+      return s;
+    }
+
+    fn readDensityNearest(position: vec3<f32>) -> f32 {
+      let coord = clamp(vec3<u32>(floor(position)), vec3<u32>(0u), vec3<u32>(sampleBounds()));
+      return densityField[flatten(coord)];
+    }
+
+    fn densityGradient(position: vec3<f32>) -> vec3<f32> {
+      let dims = sampleBounds();
+      let maxCoord = vec3<u32>(dims);
+      let coord = clamp(vec3<u32>(round(position)), vec3<u32>(0u), maxCoord);
+      let xp = flatten(vec3<u32>(min(coord.x + 1u, maxCoord.x), coord.y, coord.z));
+      let xn = flatten(vec3<u32>(select(coord.x - 1u, 0u, coord.x == 0u), coord.y, coord.z));
+      let yp = flatten(vec3<u32>(coord.x, min(coord.y + 1u, maxCoord.y), coord.z));
+      let yn = flatten(vec3<u32>(coord.x, select(coord.y - 1u, 0u, coord.y == 0u), coord.z));
+      let zp = flatten(vec3<u32>(coord.x, coord.y, min(coord.z + 1u, maxCoord.z)));
+      let zn = flatten(vec3<u32>(coord.x, coord.y, select(coord.z - 1u, 0u, coord.z == 0u)));
+      return vec3<f32>(
+        densityField[xp] - densityField[xn],
+        densityField[yp] - densityField[yn],
+        densityField[zp] - densityField[zn],
+      );
+    }
+
+    fn intersectBox(origin: vec3<f32>, direction: vec3<f32>, boxMin: vec3<f32>, boxMax: vec3<f32>) -> vec2<f32> {
+      let invDir = 1.0 / direction;
+      let tMinTemp = (boxMin - origin) * invDir;
+      let tMaxTemp = (boxMax - origin) * invDir;
+      let tMin = min(tMinTemp, tMaxTemp);
+      let tMax = max(tMinTemp, tMaxTemp);
+      return vec2<f32>(
+        max(tMin.x, max(tMin.y, tMin.z)),
+        min(tMax.x, min(tMax.y, tMax.z)),
+      );
+    }
+
+    fn firePalette(temperature: f32) -> vec3<f32> {
+      let ember = vec3<f32>(0.18, 0.018, 0.0);
+      let red = vec3<f32>(1.0, 0.075, 0.012);
+      let orange = vec3<f32>(1.0, 0.42, 0.035);
+      let whiteHot = vec3<f32>(1.0, 0.86, 0.56);
+      let redMix = smoothstep(0.01, 0.11, temperature);
+      let orangeMix = smoothstep(0.09, 0.38, temperature);
+      let whiteMix = smoothstep(0.58, 0.92, temperature);
+      return mix(mix(mix(ember, red, redMix), orange, orangeMix), whiteHot, whiteMix);
+    }
+
+    fn smokePalette(density: f32, temperature: f32, lightAmount: f32) -> vec3<f32> {
+      let warmTint = clamp(temperature * 0.5, 0.0, 1.0);
+      let cloudBrightness = clamp(pow(max(lightAmount, 0.0), 1.65) * 0.48 + density * 0.06, 0.0, 1.0);
+      return mix(
+        vec3<f32>(0.010, 0.011, 0.013),
+        vec3<f32>(0.13, 0.135, 0.14) + warmTint * vec3<f32>(0.14, 0.055, 0.012),
+        clamp(cloudBrightness + temperature * 0.08, 0.0, 1.0),
+      );
+    }
+
+    fn ihash3(p: vec3<i32>) -> f32 {
+      var h = p.x * 1664525 + p.y * 1013904223 + p.z * 22695477;
+      h ^= h >> 16;
+      h *= 0x45d9f3b;
+      h ^= h >> 16;
+      return f32(h & 0x7fffffff) * (1.0 / 2147483648.0);
+    }
+
+    fn smoothNoise(p: vec3<f32>) -> f32 {
+      let c = floor(p);
+      let f = fract(p);
+      let s = f * f * (3.0 - 2.0 * f);
+      let ci = vec3<i32>(c);
+      let a = ihash3(ci);
+      let b = ihash3(ci + vec3<i32>(1, 0, 0));
+      let c0 = ihash3(ci + vec3<i32>(0, 1, 0));
+      let d = ihash3(ci + vec3<i32>(1, 1, 0));
+      let e = ihash3(ci + vec3<i32>(0, 0, 1));
+      let g = ihash3(ci + vec3<i32>(1, 0, 1));
+      let h = ihash3(ci + vec3<i32>(0, 1, 1));
+      let k = ihash3(ci + vec3<i32>(1, 1, 1));
+      let x0 = mix(mix(a, b, s.x), mix(c0, d, s.x), s.y);
+      let x1 = mix(mix(e, g, s.x), mix(h, k, s.x), s.y);
+      return mix(x0, x1, s.z);
+    }
+
+    fn hashNoise(p: vec3<f32>) -> f32 {
+      return ihash3(vec3<i32>(floor(p)));
+    }
+
+    fn phaseHG(cosTheta: f32, g: f32) -> f32 {
+      let g2 = g * g;
+      let denom = pow(max(1.0 + g2 - 2.0 * g * cosTheta, 0.001), 1.5);
+      return (1.0 - g2) / (12.566370614359172 * denom);
+    }
+
+    fn lightDirectionAt(index: u32, samplePosition: vec3<f32>, sampleDimensions: vec3<f32>) -> vec3<f32> {
+      let direction = camera.lights[index].directionType.xyz;
+      if (camera.lights[index].directionType.w > 0.5) {
+        let pointPosition = camera.lights[index].positionIntensity.xyz * sampleDimensions;
+        return normalize(max(abs(pointPosition - samplePosition), vec3<f32>(0.0001)) * sign(pointPosition - samplePosition));
+      }
+      return normalize(select(vec3<f32>(-0.34, 0.88, 0.31), direction, dot(direction, direction) > 0.0001));
+    }
+
+    fn lightIntensityAt(index: u32, samplePosition: vec3<f32>, sampleDimensions: vec3<f32>) -> f32 {
+      let intensity = max(camera.lights[index].positionIntensity.w, 0.0);
+      if (camera.lights[index].directionType.w > 0.5) {
+        let pointPosition = camera.lights[index].positionIntensity.xyz * sampleDimensions;
+        let distance = length(pointPosition - samplePosition) / max(length(sampleDimensions), 0.0001);
+        return intensity / (1.0 + distance * 8.0 + distance * distance * 30.0);
+      }
+      return intensity;
+    }
+
+    fn lightColor(index: u32) -> vec3<f32> {
+      return camera.lights[index].color.xyz;
+    }
+
+    fn lightAmount(color: vec3<f32>) -> f32 {
+      return max(color.x, max(color.y, color.z));
+    }
+          cameraData[baseOffset + 7] = 0
+        } else {
+          cameraData.fill(0, baseOffset, baseOffset + 8)
+        }
+      }
+
+      device.queue.writeBuffer(cameraBuffer, 0, cameraData)
+
+      const pass = encoder.beginRenderPass({
+        label: 'raw-volume-raymarch-pass',
+        colorAttachments: [
+          {
+            view,
+            clearValue: { r: 0, g: 0, b: 0, a: 0 },
+            loadOp: 'clear',
+            storeOp: 'store',
+          },
+        ],
+      })
+
+      pass.setPipeline(pipeline)
+      pass.setBindGroup(0, getBindGroup(buffers))
+      pass.draw(3)
+      pass.end()
+    },
+    setRenderParams(params) {
+      if (params.stepCount !== undefined) stepCount = params.stepCount
+      if (params.lights !== undefined) lights = sanitizeRenderLights(params.lights)
+      if (params.scatteringForward !== undefined) scatteringForward = params.scatteringForward
+      if (params.scatteringBack !== undefined) scatteringBack = params.scatteringBack
+    },
+    dispose() {
+      cameraBuffer.destroy()
+      resolutionBuffer.destroy()
+    },
+  }
+}
+
+function createVolumeRaymarchShader() {
+  return /* wgsl */ `
+    struct RenderLightData {
+      directionIntensity: vec4<f32>,
+      color: vec4<f32>,
+    }
+
+    struct CameraData {
+      position: vec4<f32>,
+      right: vec4<f32>,
+      up: vec4<f32>,
+      forward: vec4<f32>,
+      volumeCenter: vec4<f32>,
+      volumeHalfExtents: vec4<f32>,
+      renderInfo: vec4<f32>,
+      renderMode: vec4<f32>,
+      focalPoint: vec4<f32>,
+      padding: vec4<f32>,
+      scatter: vec4<f32>,
+      lights: array<RenderLightData, ${MAX_RENDER_LIGHTS}>,
     }
 
     struct ResolutionData {
@@ -473,6 +818,23 @@ function createVolumeRaymarchShader() {
       return (1.0 - g2) / (12.566370614359172 * denom);
     }
 
+    fn lightDirection(index: u32) -> vec3<f32> {
+      let raw = camera.lights[index].directionIntensity.xyz;
+      return normalize(select(vec3<f32>(-0.34, 0.88, 0.31), raw, dot(raw, raw) > 0.0001));
+    }
+
+    fn lightIntensity(index: u32) -> f32 {
+      return max(camera.lights[index].directionIntensity.w, 0.0);
+    }
+
+    fn lightColor(index: u32) -> vec3<f32> {
+      return camera.lights[index].color.xyz;
+    }
+
+    fn lightAmount(color: vec3<f32>) -> f32 {
+      return max(color.x, max(color.y, color.z));
+    }
+
     fn thermalPocketPattern(
       position: vec3<f32>,
       time: f32,
@@ -604,11 +966,14 @@ function createVolumeRaymarchShader() {
       // world-space step size for one standard voxel-space step
       let worldDelta = (bounds.y - bounds.x) / max(f32(stepCount), 1.0);
 
-      let lightDirection = normalize(camera.lightDir.xyz);
-      let sampleLightStep = lightDirection * sampleDimensions * 0.036;
-      let lightViewCos = clamp(dot(lightDirection, -rayDirection), -1.0, 1.0);
-      let forwardScatter = phaseHG(lightViewCos, camera.scatter.x) * 18.0;
-      let backwardScatter = phaseHG(lightViewCos, camera.scatter.y) * 8.0;
+      let activeLightCount = u32(clamp(camera.scatter.z, 0.0, f32(${MAX_RENDER_LIGHTS})));
+      let primaryLightDirection = lightDirection(0u);
+      let primaryLightIntensity = lightIntensity(0u);
+      let primaryLightColor = lightColor(0u) * primaryLightIntensity;
+      let sampleLightStep = primaryLightDirection * sampleDimensions * 0.036;
+      let lightViewCos = clamp(dot(primaryLightDirection, -rayDirection), -1.0, 1.0);
+      let forwardScatter = phaseHG(lightViewCos, camera.scatter.x) * 18.0 * primaryLightIntensity;
+      let backwardScatter = phaseHG(lightViewCos, camera.scatter.y) * 8.0 * primaryLightIntensity;
 
       // Start voxel position
       var voxPos = (camera.position.xyz + rayDirection * bounds.x - boxMin) * invExtent * sampleDimensions;
@@ -680,9 +1045,23 @@ function createVolumeRaymarchShader() {
               heightAmbient,
             );
             let phaseLight = lightTransmission * (0.08 + forwardScatter * 0.62 + backwardScatter * 0.08);
-            let gradientBias = clamp(dot(smokeNormal, lightDirection) * 0.25 + 0.25, 0.0, 0.5);
+            let gradientBias = clamp(dot(smokeNormal, primaryLightDirection) * 0.25 + 0.25, 0.0, 0.5);
             let directionalLight = lightTransmission * gradientBias;
-            let totalLight = directionalLight + phaseLight + contourLight;
+            var totalLightColor = primaryLightColor * (directionalLight + phaseLight + contourLight);
+            for (var lightIndex = 1u; lightIndex < ${MAX_RENDER_LIGHTS}u; lightIndex += 1u) {
+              if (lightIndex >= activeLightCount) {
+                break;
+              }
+              let fillDirection = lightDirection(lightIndex);
+              let fillIntensity = lightIntensity(lightIndex);
+              let fillColor = lightColor(lightIndex) * fillIntensity;
+              let fillViewCos = clamp(dot(fillDirection, -rayDirection), -1.0, 1.0);
+              let fillPhase = phaseHG(fillViewCos, camera.scatter.x) * 7.0 * fillIntensity;
+              let fillGradient = clamp(dot(smokeNormal, fillDirection) * 0.22 + 0.22, 0.0, 0.42) * fillIntensity;
+              let fillContour = pow(rimFacing, 4.2) * 0.04 * fillIntensity;
+              totalLightColor += fillColor * (fillGradient + fillPhase + fillContour);
+            }
+            let totalLight = lightAmount(totalLightColor);
             let emissiveGI = gatherEmissiveRadiance(samplePosition, sampleDimensions, detailedDensity);
             let cloudDetail = clamp(gradLength * 7.0 + abs(microDetail - 0.5) * 2.2 + reaction * 0.24, 0.0, 1.0);
             let smokeBase = smokePalette(detailedDensity, temperature, totalLight);
@@ -707,7 +1086,7 @@ function createVolumeRaymarchShader() {
               (0.82 + detailedDensity * 1.92 + hotGas * 0.32);
             let smokeLighting =
               skyAmbient * (1.0 + localHotSoot * 0.42 + heatCore * 0.18) +
-              vec3<f32>(0.54, 0.61, 0.72) * totalLight +
+              totalLightColor +
               emissiveGI * (0.82 + coolingPocket * 0.44) * (1.0 - hotPocket * 0.35);
             let heatedSmoke = phaseSmoke * smokeLighting * creviceShade * sootShadow * pocketShadow + smokeIllumination;
             let heatIsland = smoothstep(0.04, 0.42, hotGas) * mix(0.45, 1.45, hotPocket);

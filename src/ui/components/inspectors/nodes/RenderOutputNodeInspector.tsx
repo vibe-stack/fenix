@@ -1,15 +1,19 @@
 import { useSnapshot } from 'valtio'
 import { nodeStore } from '../../../../store/node-store/nodeStore'
+import { nodeGraphStore } from '../../../../store/node-store/nodeGraphStore'
 import type { RenderOutputNodeProps } from '../../../../engine/graph/schema/nodeProps'
 import { Panel } from '../../panels/Panel'
 import { SliderRow } from '../../common/SliderRow'
 import { SectionDivider } from '../../common/SectionDivider'
+import { StatRow } from '../../common/StatRow'
 
 const DISPLAY_MODES = ['temperature', 'density', 'fuel'] as const
 
 export function RenderOutputNodeInspector() {
   const snap = useSnapshot(nodeStore)
+  const graphSnap = useSnapshot(nodeGraphStore)
   const props = snap.renderOutput
+  const connectedLights = graphSnap.edges.filter((edge) => edge.target === 'render-output' && edge.source.startsWith('light-')).length
 
   function set<K extends keyof RenderOutputNodeProps>(key: K, value: RenderOutputNodeProps[K]) {
     nodeStore.renderOutput[key] = value
@@ -39,9 +43,8 @@ export function RenderOutputNodeInspector() {
       <SliderRow label="Steps" value={props.stepCount} min={64} max={512} step={8} decimals={0} onChange={(v) => set('stepCount', v)} />
 
       <SectionDivider label="Lighting" />
-      <SliderRow label="Light X" value={props.lightDirX} min={-1} max={1} step={0.01} onChange={(v) => set('lightDirX', v)} />
-      <SliderRow label="Light Y" value={props.lightDirY} min={-1} max={1} step={0.01} onChange={(v) => set('lightDirY', v)} />
-      <SliderRow label="Light Z" value={props.lightDirZ} min={-1} max={1} step={0.01} onChange={(v) => set('lightDirZ', v)} />
+      <StatRow label="Connected" value={String(connectedLights)} />
+      <StatRow label="Control" value="light nodes" />
 
       <SectionDivider label="Scattering" />
       <SliderRow label="Forward g" value={props.scatteringForward} min={0} max={0.95} step={0.01} onChange={(v) => set('scatteringForward', v)} />

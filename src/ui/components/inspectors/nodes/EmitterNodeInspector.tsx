@@ -40,7 +40,7 @@ export function EmitterNodeInspector({ id }: { id: string }) {
 
         <SectionDivider label="Impulse" />
         <SliderRow label="Radial" value={props.radialImpulse} min={-80} max={240} step={0.5} decimals={1} onChange={(v) => set('radialImpulse', v)} />
-        <SliderRow label="Lift" value={props.liftImpulse} min={-80} max={80} step={0.5} decimals={1} onChange={(v) => set('liftImpulse', v)} />
+        <SliderRow label="Lift" value={props.liftImpulse} min={-160} max={160} step={0.5} decimals={1} onChange={(v) => set('liftImpulse', v)} />
         <SliderRow label="Turbulence" value={props.turbulence} min={0} max={48} step={0.1} decimals={1} onChange={(v) => set('turbulence', v)} />
         <SliderRow label="Crumble" value={props.crumbleStrength} min={-48} max={48} step={0.1} decimals={1} onChange={(v) => set('crumbleStrength', v)} />
         <SliderRow label="Implosion" value={props.implosionStrength} min={0} max={64} step={0.25} decimals={2} onChange={(v) => set('implosionStrength', v)} />
@@ -54,12 +54,13 @@ export function EmitterNodeInspector({ id }: { id: string }) {
         <SliderRow label="Patchiness" value={props.heatPatchiness} min={0} max={1} step={0.01} onChange={(v) => set('heatPatchiness', v)} />
         <SliderRow label="Patch Scale" value={props.patchScale} min={0.25} max={128} step={0.25} decimals={2} onChange={(v) => set('patchScale', v)} />
         <SliderRow label="Core Heat" value={props.coreHeat} min={-8} max={16} step={0.05} decimals={2} onChange={(v) => set('coreHeat', v)} />
-        <SliderRow label="Core Lift" value={props.coreLift} min={-48} max={48} step={0.25} decimals={2} onChange={(v) => set('coreLift', v)} />
+        <SliderRow label="Core Lift" value={props.coreLift} min={-96} max={96} step={0.25} decimals={2} onChange={(v) => set('coreLift', v)} />
 
         <SectionDivider label="Behavior" />
         <SliderRow label="Expand" value={props.expansionRate} min={0} max={3} step={0.01} decimals={2} onChange={(v) => set('expansionRate', v)} />
         <SliderRow label="Sustain" value={props.sustain} min={0} max={3} step={0.01} decimals={2} onChange={(v) => set('sustain', v)} />
-        <SliderRow label="Mushroom" value={props.mushroomStrength} min={0} max={4} step={0.01} decimals={2} onChange={(v) => set('mushroomStrength', v)} />
+        <SliderRow label="Mushroom" value={props.mushroomStrength} min={0} max={8} step={0.01} decimals={2} onChange={(v) => set('mushroomStrength', v)} />
+        <SliderRow label="Entrain" value={props.smokeEntrainment} min={0} max={8} step={0.01} decimals={2} onChange={(v) => set('smokeEntrainment', v)} />
       </Panel>
     </>
   )

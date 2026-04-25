@@ -45,6 +45,8 @@ export interface ExplosionSource {
   sustain?: number
   /** Scales the toroidal circulation that forms the mushroom cap and stem. */
   mushroomStrength?: number
+  /** How strongly the rising core entrains surrounding smoke and pulls it into the column. */
+  smokeEntrainment?: number
   /** Per-source random seed for stable but non-identical patches. */
   seed: number
 }
@@ -674,7 +676,7 @@ export const cinematicExplosionSources: readonly ExplosionSource[] = [
 ]
 
 export function packExplosionSources(sources: readonly ExplosionSource[]) {
-  const floatsPerSource = 28
+  const floatsPerSource = 32
   const data = new Float32Array(sources.length * floatsPerSource)
 
   sources.forEach((source, index) => {
@@ -712,6 +714,7 @@ export function packExplosionSources(sources: readonly ExplosionSource[]) {
       source.sustain ?? 0,
       source.mushroomStrength ?? 1,
     ], offset + 24)
+    data.set([source.smokeEntrainment ?? 1, 0, 0, 0], offset + 28)
   })
 
   return data
@@ -723,6 +726,7 @@ function source(sourceValue: ExplosionSource): ExplosionSource {
     expansionRate: 1,
     sustain: 0,
     mushroomStrength: 1,
+    smokeEntrainment: 1,
     ...sourceValue,
   }
 }

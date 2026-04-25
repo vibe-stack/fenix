@@ -4,6 +4,7 @@ import type { Node, Edge } from '@xyflow/react'
 import { nodeStore } from '../../../store/node-store/nodeStore'
 import { nodeGraphStore } from '../../../store/node-store/nodeGraphStore'
 import type { EmitterNodeData } from './nodes/EmitterNode'
+import type { LightNodeData } from './nodes/LightNode'
 
 export function useGraphNodes(): { nodes: Node[]; edges: Edge[] } {
   const snap = useSnapshot(nodeStore)
@@ -16,6 +17,14 @@ export function useGraphNodes(): { nodes: Node[]; edges: Edge[] } {
       position: graphSnap.nodePositions[emitter.id] ?? { x: 60, y: 80 },
       selected: snap.selectedId === emitter.id,
       data: { emitterId: emitter.id, label: emitter.label } satisfies EmitterNodeData,
+    }))
+
+    const lightNodes: Node[] = snap.lights.map((light) => ({
+      id: light.id,
+      type: 'light',
+      position: graphSnap.nodePositions[light.id] ?? { x: 610, y: 80 },
+      selected: snap.selectedId === light.id,
+      data: { lightId: light.id, label: light.label } satisfies LightNodeData,
     }))
 
     const fixedNodes: Node[] = [
@@ -42,7 +51,7 @@ export function useGraphNodes(): { nodes: Node[]; edges: Edge[] } {
       },
     ]
 
-    return [...emitterNodes, ...fixedNodes]
+    return [...emitterNodes, ...lightNodes, ...fixedNodes]
   }, [snap, graphSnap])
 
   const edges = useMemo<Edge[]>(() =>

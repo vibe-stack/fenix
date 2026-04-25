@@ -25,6 +25,12 @@ export const foundationalNodeTypes: GraphNodeDefinition[] = [
     description: 'Advects scalar and vector fields through the velocity domain each step.',
   },
   {
+    id: 'light',
+    label: 'Light',
+    category: 'Lighting',
+    description: 'Directional viewport light with color and intensity controls.',
+  },
+  {
     id: 'render-output',
     label: 'Render Output',
     category: 'Output',

@@ -20,8 +20,8 @@ export function SimulationParamsSection() {
       <SliderRow
         label="Buoyancy"
         value={runtimeParams.buoyancy}
-        min={-8}
-        max={16}
+        min={-12}
+        max={24}
         step={0.05}
         onChange={(v) => setParam('buoyancy', v)}
       />
@@ -29,7 +29,7 @@ export function SimulationParamsSection() {
         label="Vorticity"
         value={runtimeParams.vorticityStrength}
         min={0}
-        max={16}
+        max={32}
         step={0.05}
         onChange={(v) => setParam('vorticityStrength', v)}
       />
