@@ -19,6 +19,7 @@ export const blankPreset: NewFilePreset = {
     windStrength: 0,
     buoyancy: 3.6,
     vorticityStrength: 2.15,
+    worldSize: 10,
   },
   renderOutput: {
     stepCount: 400,

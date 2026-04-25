@@ -47,8 +47,8 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   let direction = gradient / max(length(gradient), 0.0001);
   let force = cross(direction, vorticityField[index].xyz) * params.vorticityStrength * 1.45;
   var velocity = velocityField[index].xyz + force * params.deltaTime;
-
-  velocity = clamp(velocity, vec3<f32>(-12.0), vec3<f32>(12.0));
+  let voxelSpeedLimit = 80.0 / max(params.dx, 0.001);
+  velocity = clamp(velocity, vec3<f32>(-voxelSpeedLimit), vec3<f32>(voxelSpeedLimit));
   velocityField[index] = vec4<f32>(velocity, 0.0);
   confinementMagnitudeField[index] = length(force);
 }

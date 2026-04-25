@@ -36,6 +36,7 @@ export interface CombustionVolumeSimulationOptions {
   resolution?: VolumeResolution
   wind?: readonly [number, number, number]
   windStrength?: number
+  worldSize?: number
 }
 
 export function createCombustionVolumeSimulation(
@@ -174,6 +175,7 @@ export function createCombustionVolumeSimulation(
   let windStrength = options.windStrength ?? 0
   let buoyancy = 3.6
   let vorticityStrength = 2.15
+  let worldSize = options.worldSize ?? 10.0
 
   function doReset(atSeconds: number) {
     currentScalarSet = 0
@@ -206,9 +208,10 @@ export function createCombustionVolumeSimulation(
         lastElapsedSeconds = elapsedSeconds
       }
 
-      const effectiveStep = Math.max(1 / 120, Math.min(stepSeconds, 1 / 30))
+      const effectiveStep = Math.min(stepSeconds, 1 / 15)
       const localTime = elapsedSeconds - simulationStartSeconds
       const previousLocalTime = lastElapsedSeconds - simulationStartSeconds
+      const dx = worldSize / Math.max(resolution.width, resolution.depth)
       device.queue.writeBuffer(
         simulationParamsBuffer,
         0,
@@ -223,7 +226,8 @@ export function createCombustionVolumeSimulation(
           windStrength,
           buoyancy,
           vorticityStrength,
-          0, 0, // padding
+          dx,
+          worldSize,
         ]),
       )
 
@@ -295,13 +299,14 @@ export function createCombustionVolumeSimulation(
       performanceSchedule = createSimulationPerformanceSchedule(resolution, scalarAdvectionMode)
     },
     getRuntimeParams() {
-      return { wind: [...wind] as [number, number, number], windStrength, buoyancy, vorticityStrength }
+      return { wind: [...wind] as [number, number, number], windStrength, buoyancy, vorticityStrength, worldSize }
     },
     setRuntimeParams(params) {
       if (params.wind !== undefined) wind = [params.wind[0], params.wind[1], params.wind[2]]
       if (params.windStrength !== undefined) windStrength = params.windStrength
       if (params.buoyancy !== undefined) buoyancy = params.buoyancy
       if (params.vorticityStrength !== undefined) vorticityStrength = params.vorticityStrength
+      if (params.worldSize !== undefined) worldSize = params.worldSize
     },
     updateSources(sources) {
       sourceInjection.updateSources(sources)

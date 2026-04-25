@@ -80,6 +80,7 @@ export const oilWellFirePreset: NewFilePreset = {
     windStrength: 0.55,
     buoyancy: 5.0,
     vorticityStrength: 2.6,
+    worldSize: 30,
   },
   renderOutput: {
     stepCount: 360,

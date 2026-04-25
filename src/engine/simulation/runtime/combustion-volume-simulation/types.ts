@@ -8,6 +8,7 @@ export interface SimulationRuntimeParams {
   windStrength: number
   buoyancy: number
   vorticityStrength: number
+  worldSize: number
 }
 
 import type { ExplosionSource } from '../passes/explosionSources'

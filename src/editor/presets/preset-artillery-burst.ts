@@ -81,6 +81,7 @@ export const artilleryBurstPreset: NewFilePreset = {
     windStrength: 0.22,
     buoyancy: 4.8,
     vorticityStrength: 4.2,
+    worldSize: 50,
   },
   renderOutput: {
     stepCount: 384,

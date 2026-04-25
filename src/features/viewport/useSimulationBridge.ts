@@ -12,5 +12,6 @@ export function useSimulationBridge(
     handle.setWindStrength(params.windStrength)
     handle.setBuoyancy(params.buoyancy)
     handle.setVorticityStrength(params.vorticityStrength)
-  }, [handle, params.wind, params.windStrength, params.buoyancy, params.vorticityStrength])
+    handle.setWorldSize(params.worldSize)
+  }, [handle, params.wind, params.windStrength, params.buoyancy, params.vorticityStrength, params.worldSize])
 }

@@ -16,6 +16,17 @@ export function SimulationParamsSection() {
 
   return (
     <Panel title="Simulation">
+      <SectionDivider label="Domain" />
+      <SliderRow
+        label="World Size"
+        value={runtimeParams.worldSize}
+        min={1}
+        max={2000}
+        step={1}
+        decimals={0}
+        onChange={(v) => setParam('worldSize', v)}
+      />
+
       <SectionDivider label="Fluid" />
       <SliderRow
         label="Buoyancy"

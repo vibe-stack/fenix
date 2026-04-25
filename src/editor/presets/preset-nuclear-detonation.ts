@@ -226,6 +226,7 @@ export const nuclearDetonationPreset: NewFilePreset = {
     windStrength: 0.06,
     buoyancy: 8.8,
     vorticityStrength: 6.0,
+    worldSize: 500,
   },
   renderOutput: {
     stepCount: 448,

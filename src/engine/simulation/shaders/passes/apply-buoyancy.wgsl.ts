@@ -84,10 +84,11 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   velocity += (-densityGradient / densityGradientLength) * surfaceBreakup * dt * 2.8;
   velocity += shredDirection * coldSmoke * dt * (0.72 + surfaceBreakup * 2.4);
   velocity += params.wind.xyz * coldSmoke * params.wind.w * dt * 0.9;
+  let voxelSpeedLimit = 80.0 / max(params.dx, 0.001);
   velocity.y = clamp(
     velocity.y + (temperatureLift + hotEntrainment * buoyancyResponse * 0.24 - smokeWeight) * dt,
-    -3.2,
-    18.0,
+    -voxelSpeedLimit,
+    voxelSpeedLimit,
   );
 
   if (id.x == 0u || id.x == volumeInfo.width - 1u || id.z == 0u || id.z == volumeInfo.depth - 1u) {

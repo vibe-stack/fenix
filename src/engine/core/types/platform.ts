@@ -25,6 +25,7 @@ export interface SimulationHandle {
   setWindStrength(v: number): void
   setBuoyancy(v: number): void
   setVorticityStrength(v: number): void
+  setWorldSize(v: number): void
   updateSources(sources: readonly ExplosionSource[]): void
   setRenderParams(params: { stepCount?: number; lights?: readonly RenderLight[]; scatteringForward?: number; scatteringBack?: number }): void
   /** Advance simulation by deltaSeconds and render a frame at the given time, used for offline export. */

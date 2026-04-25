@@ -7,7 +7,7 @@ struct SimulationParams {
   wind: vec4<f32>,        // xyz = direction, w = strength
   buoyancy: f32,          // temperature lift scale
   vorticityStrength: f32, // vorticity confinement scale
-  _pad0: f32,
-  _pad1: f32,
+  dx: f32,                // meters per voxel (worldSize / max(width, depth))
+  worldSize: f32,         // physical domain size in meters
 }
 `

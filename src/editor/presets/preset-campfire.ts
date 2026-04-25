@@ -53,6 +53,7 @@ export const campfirePreset: NewFilePreset = {
     windStrength: 0.03,
     buoyancy: 2.6,
     vorticityStrength: 0.95,
+    worldSize: 5,
   },
   renderOutput: {
     stepCount: 320,

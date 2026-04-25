@@ -80,5 +80,10 @@ export function parseGraphJson(raw: string): SerializedGraph {
   if (typeof obj['advection'] !== 'object') throw new Error('Missing advection node.')
   if (typeof obj['renderOutput'] !== 'object') throw new Error('Missing renderOutput node.')
 
-  return obj as unknown as SerializedGraph
+  const graph = obj as unknown as SerializedGraph
+  // Backfill fields added after version 1 so old saves still load cleanly.
+  if (typeof graph.runtimeParams.worldSize !== 'number') {
+    graph.runtimeParams.worldSize = 10
+  }
+  return graph
 }

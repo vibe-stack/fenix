@@ -295,7 +295,8 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   temperatureField[index] = temperature;
   fuelField[index] = fuel;
   reactionField[index] = reaction;
-  velocityField[index] = vec4<f32>(clamp(velocity, vec3<f32>(-18.0), vec3<f32>(18.0)), 0.0);
+  let voxelSpeedLimit = 80.0 / max(params.dx, 0.001);
+  velocityField[index] = vec4<f32>(clamp(velocity, vec3<f32>(-voxelSpeedLimit), vec3<f32>(voxelSpeedLimit)), 0.0);
 }
 `,
   ])

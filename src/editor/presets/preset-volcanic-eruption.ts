@@ -84,6 +84,7 @@ export const volcanicEruptionPreset: NewFilePreset = {
     windStrength: 0.25,
     buoyancy: 7.2,
     vorticityStrength: 3.8,
+    worldSize: 200,
   },
   renderOutput: {
     stepCount: 440,
