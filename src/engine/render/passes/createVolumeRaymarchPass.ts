@@ -248,8 +248,8 @@ function createVolumeRaymarchShader() {
       renderInfo: vec4<f32>,
       renderMode: vec4<f32>,
       focalPoint: vec4<f32>,
-      lightDir: vec4<f32>,      // xyz = direction, w = unused
-      scatter: vec4<f32>,       // x = forwardG, y = backG, z/w unused
+      lightDir: vec4<f32>,
+      scatter: vec4<f32>,
     }
 
     struct ResolutionData {
@@ -269,6 +269,14 @@ function createVolumeRaymarchShader() {
       @location(0) uv: vec2<f32>,
     }
 
+    // All 4 fields packed so one trilinear pass reads everything at once
+    struct VoxelSample {
+      density: f32,
+      temperature: f32,
+      fuel: f32,
+      reaction: f32,
+    }
+
     @group(0) @binding(0) var<uniform> camera: CameraData;
     @group(0) @binding(1) var<uniform> resolution: ResolutionData;
     @group(0) @binding(2) var<storage, read> densityField: array<f32>;
@@ -278,33 +286,12 @@ function createVolumeRaymarchShader() {
     @group(0) @binding(6) var<storage, read> activeBrickFlags: array<u32>;
     @group(0) @binding(7) var<uniform> brickInfo: BrickInfo;
 
-    fn maxCoordU() -> vec3<u32> {
-      return vec3<u32>(
-        u32(resolution.width) - 1u,
-        u32(resolution.height) - 1u,
-        u32(resolution.depth) - 1u,
-      );
-    }
-
     fn sampleBounds() -> vec3<f32> {
       return vec3<f32>(resolution.width, resolution.height, resolution.depth) - vec3<f32>(1.0);
     }
 
-    fn clampCoord(coord: vec3<u32>) -> vec3<u32> {
-      let maxCoord = maxCoordU();
-      return vec3<u32>(
-        clamp(coord.x, 0u, maxCoord.x),
-        clamp(coord.y, 0u, maxCoord.y),
-        clamp(coord.z, 0u, maxCoord.z),
-      );
-    }
-
     fn brickSizeU() -> u32 {
       return max(brickInfo.params.x, 1u);
-    }
-
-    fn brickSizeF() -> f32 {
-      return f32(brickSizeU());
     }
 
     fn activeBrickIndexForCoord(coord: vec3<u32>) -> u32 {
@@ -316,161 +303,116 @@ function createVolumeRaymarchShader() {
       return coord.x + u32(resolution.width) * (coord.y + u32(resolution.height) * coord.z);
     }
 
-    fn readDensity(coord: vec3<u32>) -> f32 {
-      return densityField[flatten(clampCoord(coord))];
-    }
-
-    fn readTemperature(coord: vec3<u32>) -> f32 {
-      return temperatureField[flatten(clampCoord(coord))];
-    }
-
-    fn readFuel(coord: vec3<u32>) -> f32 {
-      return fuelField[flatten(clampCoord(coord))];
-    }
-
-    fn readReaction(coord: vec3<u32>) -> f32 {
-      return reactionField[flatten(clampCoord(coord))];
-    }
-
     fn isActiveSample(position: vec3<f32>) -> bool {
       let coord = vec3<u32>(floor(clamp(position, vec3<f32>(0.0), sampleBounds())));
       return activeBrickFlags[activeBrickIndexForCoord(coord)] != 0u;
     }
 
-    fn distanceToNextBrickBoundary(position: vec3<f32>, direction: vec3<f32>) -> f32 {
-      let epsilon = 0.001;
+    // Returns voxel-space distance (same units as voxDelta) to just past the next brick
+    // boundary. voxPos and voxRayDir are both in voxel coordinates.
+    // voxRayDir has magnitude |voxRayDir| voxels per unit-t; tx/ty/tz are parametric t,
+    // so we multiply by |voxRayDir| to get voxel-space distance.
+    fn voxelDistToNextBrick(voxPos: vec3<f32>, voxRayDir: vec3<f32>) -> f32 {
       let far = 1e9;
-      let brickExtent = brickSizeF();
-      let probe = clamp(position + sign(direction) * epsilon, vec3<f32>(0.0), sampleBounds());
-      let brickCoord = floor(probe / brickExtent);
+      let brickExtent = f32(brickSizeU());
+      let brickCoord = floor(voxPos / brickExtent);
       let boundary = vec3<f32>(
-        select(brickCoord.x * brickExtent, (brickCoord.x + 1.0) * brickExtent, direction.x > 0.0),
-        select(brickCoord.y * brickExtent, (brickCoord.y + 1.0) * brickExtent, direction.y > 0.0),
-        select(brickCoord.z * brickExtent, (brickCoord.z + 1.0) * brickExtent, direction.z > 0.0),
+        select(brickCoord.x * brickExtent, (brickCoord.x + 1.0) * brickExtent, voxRayDir.x > 0.0),
+        select(brickCoord.y * brickExtent, (brickCoord.y + 1.0) * brickExtent, voxRayDir.y > 0.0),
+        select(brickCoord.z * brickExtent, (brickCoord.z + 1.0) * brickExtent, voxRayDir.z > 0.0),
       );
-      let tx = select(far, (boundary.x - position.x) / direction.x, abs(direction.x) > 0.00001);
-      let ty = select(far, (boundary.y - position.y) / direction.y, abs(direction.y) > 0.00001);
-      let tz = select(far, (boundary.z - position.z) / direction.z, abs(direction.z) > 0.00001);
-      return max(min(tx, min(ty, tz)) + epsilon, epsilon);
+      let tx = select(far, (boundary.x - voxPos.x) / voxRayDir.x, abs(voxRayDir.x) > 0.00001);
+      let ty = select(far, (boundary.y - voxPos.y) / voxRayDir.y, abs(voxRayDir.y) > 0.00001);
+      let tz = select(far, (boundary.z - voxPos.z) / voxRayDir.z, abs(voxRayDir.z) > 0.00001);
+      // parametric t → voxel distance, then +0.5 vox to land inside the next brick
+      return min(tx, min(ty, tz)) * length(voxRayDir) + 0.5;
     }
 
-    fn sampleDensity(position: vec3<f32>) -> f32 {
-      let dimensions = sampleBounds();
-      let clamped = clamp(position, vec3<f32>(0.0), dimensions);
+    // Single trilinear pass for all 4 fields — 8 index lookups, 4x reads each = 32 reads
+    // vs the old 4 separate functions doing 32 reads each = 128 reads total.
+    fn sampleAllFields(position: vec3<f32>) -> VoxelSample {
+      let dims = sampleBounds();
+      let clamped = clamp(position, vec3<f32>(0.0), dims);
       let base = vec3<u32>(floor(clamped));
-      let upper = min(base + vec3<u32>(1u), vec3<u32>(dimensions));
-      let fraction = fract(clamped);
-      let c000 = readDensity(base);
-      let c100 = readDensity(vec3<u32>(upper.x, base.y, base.z));
-      let c010 = readDensity(vec3<u32>(base.x, upper.y, base.z));
-      let c110 = readDensity(vec3<u32>(upper.x, upper.y, base.z));
-      let c001 = readDensity(vec3<u32>(base.x, base.y, upper.z));
-      let c101 = readDensity(vec3<u32>(upper.x, base.y, upper.z));
-      let c011 = readDensity(vec3<u32>(base.x, upper.y, upper.z));
-      let c111 = readDensity(upper);
-      let x00 = mix(c000, c100, fraction.x);
-      let x10 = mix(c010, c110, fraction.x);
-      let x01 = mix(c001, c101, fraction.x);
-      let x11 = mix(c011, c111, fraction.x);
-      return mix(mix(x00, x10, fraction.y), mix(x01, x11, fraction.y), fraction.z);
+      let upper = min(base + vec3<u32>(1u), vec3<u32>(dims));
+      let f = fract(clamped);
+
+      let i000 = flatten(base);
+      let i100 = flatten(vec3<u32>(upper.x, base.y, base.z));
+      let i010 = flatten(vec3<u32>(base.x, upper.y, base.z));
+      let i110 = flatten(vec3<u32>(upper.x, upper.y, base.z));
+      let i001 = flatten(vec3<u32>(base.x, base.y, upper.z));
+      let i101 = flatten(vec3<u32>(upper.x, base.y, upper.z));
+      let i011 = flatten(vec3<u32>(base.x, upper.y, upper.z));
+      let i111 = flatten(upper);
+
+      var s: VoxelSample;
+
+      // Density
+      let d_x00 = mix(densityField[i000], densityField[i100], f.x);
+      let d_x10 = mix(densityField[i010], densityField[i110], f.x);
+      let d_x01 = mix(densityField[i001], densityField[i101], f.x);
+      let d_x11 = mix(densityField[i011], densityField[i111], f.x);
+      s.density = mix(mix(d_x00, d_x10, f.y), mix(d_x01, d_x11, f.y), f.z);
+
+      // Temperature
+      let t_x00 = mix(temperatureField[i000], temperatureField[i100], f.x);
+      let t_x10 = mix(temperatureField[i010], temperatureField[i110], f.x);
+      let t_x01 = mix(temperatureField[i001], temperatureField[i101], f.x);
+      let t_x11 = mix(temperatureField[i011], temperatureField[i111], f.x);
+      s.temperature = mix(mix(t_x00, t_x10, f.y), mix(t_x01, t_x11, f.y), f.z);
+
+      // Fuel
+      let fu_x00 = mix(fuelField[i000], fuelField[i100], f.x);
+      let fu_x10 = mix(fuelField[i010], fuelField[i110], f.x);
+      let fu_x01 = mix(fuelField[i001], fuelField[i101], f.x);
+      let fu_x11 = mix(fuelField[i011], fuelField[i111], f.x);
+      s.fuel = mix(mix(fu_x00, fu_x10, f.y), mix(fu_x01, fu_x11, f.y), f.z);
+
+      // Reaction
+      let r_x00 = mix(reactionField[i000], reactionField[i100], f.x);
+      let r_x10 = mix(reactionField[i010], reactionField[i110], f.x);
+      let r_x01 = mix(reactionField[i001], reactionField[i101], f.x);
+      let r_x11 = mix(reactionField[i011], reactionField[i111], f.x);
+      s.reaction = mix(mix(r_x00, r_x10, f.y), mix(r_x01, r_x11, f.y), f.z);
+
+      return s;
     }
 
-    fn decU(value: u32) -> u32 {
-      if (value == 0u) {
-        return 0u;
-      }
-
-      return value - 1u;
-    }
-
-    fn incU(value: u32, maxValue: u32) -> u32 {
-      return min(value + 1u, maxValue);
+    // Nearest-neighbour density only — used for shadow ray and GI probes where
+    // sub-voxel accuracy is invisible but trilinear cost matters.
+    fn readDensityNearest(position: vec3<f32>) -> f32 {
+      let coord = clamp(vec3<u32>(floor(position)), vec3<u32>(0u), vec3<u32>(sampleBounds()));
+      return densityField[flatten(coord)];
     }
 
     fn densityGradient(position: vec3<f32>) -> vec3<f32> {
-      let maxCoord = maxCoordU();
-      let coord = vec3<u32>(round(clamp(position, vec3<f32>(0.0), vec3<f32>(maxCoord))));
-      let dx = readDensity(vec3<u32>(incU(coord.x, maxCoord.x), coord.y, coord.z)) -
-        readDensity(vec3<u32>(decU(coord.x), coord.y, coord.z));
-      let dy = readDensity(vec3<u32>(coord.x, incU(coord.y, maxCoord.y), coord.z)) -
-        readDensity(vec3<u32>(coord.x, decU(coord.y), coord.z));
-      let dz = readDensity(vec3<u32>(coord.x, coord.y, incU(coord.z, maxCoord.z))) -
-        readDensity(vec3<u32>(coord.x, coord.y, decU(coord.z)));
-      return vec3<f32>(dx, dy, dz);
-    }
-
-    fn sampleTemperature(position: vec3<f32>) -> f32 {
-      let dimensions = sampleBounds();
-      let clamped = clamp(position, vec3<f32>(0.0), dimensions);
-      let base = vec3<u32>(floor(clamped));
-      let upper = min(base + vec3<u32>(1u), vec3<u32>(dimensions));
-      let fraction = fract(clamped);
-      let c000 = readTemperature(base);
-      let c100 = readTemperature(vec3<u32>(upper.x, base.y, base.z));
-      let c010 = readTemperature(vec3<u32>(base.x, upper.y, base.z));
-      let c110 = readTemperature(vec3<u32>(upper.x, upper.y, base.z));
-      let c001 = readTemperature(vec3<u32>(base.x, base.y, upper.z));
-      let c101 = readTemperature(vec3<u32>(upper.x, base.y, upper.z));
-      let c011 = readTemperature(vec3<u32>(base.x, upper.y, upper.z));
-      let c111 = readTemperature(upper);
-      let x00 = mix(c000, c100, fraction.x);
-      let x10 = mix(c010, c110, fraction.x);
-      let x01 = mix(c001, c101, fraction.x);
-      let x11 = mix(c011, c111, fraction.x);
-      return mix(mix(x00, x10, fraction.y), mix(x01, x11, fraction.y), fraction.z);
-    }
-
-    fn sampleFuel(position: vec3<f32>) -> f32 {
-      let dimensions = sampleBounds();
-      let clamped = clamp(position, vec3<f32>(0.0), dimensions);
-      let base = vec3<u32>(floor(clamped));
-      let upper = min(base + vec3<u32>(1u), vec3<u32>(dimensions));
-      let fraction = fract(clamped);
-      let c000 = readFuel(base);
-      let c100 = readFuel(vec3<u32>(upper.x, base.y, base.z));
-      let c010 = readFuel(vec3<u32>(base.x, upper.y, base.z));
-      let c110 = readFuel(vec3<u32>(upper.x, upper.y, base.z));
-      let c001 = readFuel(vec3<u32>(base.x, base.y, upper.z));
-      let c101 = readFuel(vec3<u32>(upper.x, base.y, upper.z));
-      let c011 = readFuel(vec3<u32>(base.x, upper.y, upper.z));
-      let c111 = readFuel(upper);
-      let x00 = mix(c000, c100, fraction.x);
-      let x10 = mix(c010, c110, fraction.x);
-      let x01 = mix(c001, c101, fraction.x);
-      let x11 = mix(c011, c111, fraction.x);
-      return mix(mix(x00, x10, fraction.y), mix(x01, x11, fraction.y), fraction.z);
-    }
-
-    fn sampleReaction(position: vec3<f32>) -> f32 {
-      let dimensions = sampleBounds();
-      let clamped = clamp(position, vec3<f32>(0.0), dimensions);
-      let base = vec3<u32>(floor(clamped));
-      let upper = min(base + vec3<u32>(1u), vec3<u32>(dimensions));
-      let fraction = fract(clamped);
-      let c000 = readReaction(base);
-      let c100 = readReaction(vec3<u32>(upper.x, base.y, base.z));
-      let c010 = readReaction(vec3<u32>(base.x, upper.y, base.z));
-      let c110 = readReaction(vec3<u32>(upper.x, upper.y, base.z));
-      let c001 = readReaction(vec3<u32>(base.x, base.y, upper.z));
-      let c101 = readReaction(vec3<u32>(upper.x, base.y, upper.z));
-      let c011 = readReaction(vec3<u32>(base.x, upper.y, upper.z));
-      let c111 = readReaction(upper);
-      let x00 = mix(c000, c100, fraction.x);
-      let x10 = mix(c010, c110, fraction.x);
-      let x01 = mix(c001, c101, fraction.x);
-      let x11 = mix(c011, c111, fraction.x);
-      return mix(mix(x00, x10, fraction.y), mix(x01, x11, fraction.y), fraction.z);
+      let dims = sampleBounds();
+      let maxCoord = vec3<u32>(dims);
+      let coord = clamp(vec3<u32>(round(position)), vec3<u32>(0u), maxCoord);
+      let xp = flatten(vec3<u32>(min(coord.x + 1u, maxCoord.x), coord.y, coord.z));
+      let xn = flatten(vec3<u32>(select(coord.x - 1u, 0u, coord.x == 0u), coord.y, coord.z));
+      let yp = flatten(vec3<u32>(coord.x, min(coord.y + 1u, maxCoord.y), coord.z));
+      let yn = flatten(vec3<u32>(coord.x, select(coord.y - 1u, 0u, coord.y == 0u), coord.z));
+      let zp = flatten(vec3<u32>(coord.x, coord.y, min(coord.z + 1u, maxCoord.z)));
+      let zn = flatten(vec3<u32>(coord.x, coord.y, select(coord.z - 1u, 0u, coord.z == 0u)));
+      return vec3<f32>(
+        densityField[xp] - densityField[xn],
+        densityField[yp] - densityField[yn],
+        densityField[zp] - densityField[zn],
+      );
     }
 
     fn intersectBox(origin: vec3<f32>, direction: vec3<f32>, boxMin: vec3<f32>, boxMax: vec3<f32>) -> vec2<f32> {
-      let inverseDirection = 1.0 / direction;
-      let tMinTemp = (boxMin - origin) * inverseDirection;
-      let tMaxTemp = (boxMax - origin) * inverseDirection;
+      let invDir = 1.0 / direction;
+      let tMinTemp = (boxMin - origin) * invDir;
+      let tMaxTemp = (boxMax - origin) * invDir;
       let tMin = min(tMinTemp, tMaxTemp);
       let tMax = max(tMinTemp, tMaxTemp);
-      let t0 = max(tMin.x, max(tMin.y, tMin.z));
-      let t1 = min(tMax.x, min(tMax.y, tMax.z));
-      return vec2<f32>(t0, t1);
+      return vec2<f32>(
+        max(tMin.x, max(tMin.y, tMin.z)),
+        min(tMax.x, min(tMax.y, tMax.z)),
+      );
     }
 
     fn firePalette(temperature: f32) -> vec3<f32> {
@@ -486,9 +428,6 @@ function createVolumeRaymarchShader() {
 
     fn smokePalette(density: f32, temperature: f32, lightAmount: f32) -> vec3<f32> {
       let warmTint = clamp(temperature * 0.5, 0.0, 1.0);
-      // Use a non-linear brightness curve so lightly-lit smoke stays dark/charcoal
-      // and only genuinely bright areas (direct sun + clear path) go grey.
-      // Previously the linear mix made everything blow out to grey at moderate light.
       let cloudBrightness = clamp(pow(max(lightAmount, 0.0), 1.65) * 0.48 + density * 0.06, 0.0, 1.0);
       return mix(
         vec3<f32>(0.010, 0.011, 0.013),
@@ -497,29 +436,35 @@ function createVolumeRaymarchShader() {
       );
     }
 
-    fn hashNoise3D(position: vec3<f32>) -> f32 {
-      return fract(sin(dot(position, vec3<f32>(127.1, 311.7, 74.7))) * 43758.5453123);
+    // Integer hash — no sin/transcendentals, pure bitwise ops, extremely fast on GPU.
+    fn ihash3(p: vec3<i32>) -> f32 {
+      var h = p.x * 1664525 + p.y * 1013904223 + p.z * 22695477;
+      h ^= h >> 16;
+      h *= 0x45d9f3b;
+      h ^= h >> 16;
+      return f32(h & 0x7fffffff) * (1.0 / 2147483648.0);
     }
 
-    fn valueNoise3D(position: vec3<f32>) -> f32 {
-      let cell = floor(position);
-      let fraction = fract(position);
-      let smoooth = fraction * fraction * (vec3<f32>(3.0) - 2.0 * fraction);
-      let c000 = hashNoise3D(cell);
-      let c100 = hashNoise3D(cell + vec3<f32>(1.0, 0.0, 0.0));
-      let c010 = hashNoise3D(cell + vec3<f32>(0.0, 1.0, 0.0));
-      let c110 = hashNoise3D(cell + vec3<f32>(1.0, 1.0, 0.0));
-      let c001 = hashNoise3D(cell + vec3<f32>(0.0, 0.0, 1.0));
-      let c101 = hashNoise3D(cell + vec3<f32>(1.0, 0.0, 1.0));
-      let c011 = hashNoise3D(cell + vec3<f32>(0.0, 1.0, 1.0));
-      let c111 = hashNoise3D(cell + vec3<f32>(1.0, 1.0, 1.0));
-      let x00 = mix(c000, c100, smoooth.x);
-      let x10 = mix(c010, c110, smoooth.x);
-      let x01 = mix(c001, c101, smoooth.x);
-      let x11 = mix(c011, c111, smoooth.x);
-      let y0 = mix(x00, x10, smoooth.y);
-      let y1 = mix(x01, x11, smoooth.y);
-      return mix(y0, y1, smoooth.z);
+    fn smoothNoise(p: vec3<f32>) -> f32 {
+      let c = floor(p);
+      let f = fract(p);
+      let s = f * f * (3.0 - 2.0 * f);
+      let ci = vec3<i32>(c);
+      let a = ihash3(ci);
+      let b = ihash3(ci + vec3<i32>(1, 0, 0));
+      let c0 = ihash3(ci + vec3<i32>(0, 1, 0));
+      let d = ihash3(ci + vec3<i32>(1, 1, 0));
+      let e = ihash3(ci + vec3<i32>(0, 0, 1));
+      let g = ihash3(ci + vec3<i32>(1, 0, 1));
+      let h = ihash3(ci + vec3<i32>(0, 1, 1));
+      let k = ihash3(ci + vec3<i32>(1, 1, 1));
+      let x0 = mix(mix(a, b, s.x), mix(c0, d, s.x), s.y);
+      let x1 = mix(mix(e, g, s.x), mix(h, k, s.x), s.y);
+      return mix(x0, x1, s.z);
+    }
+
+    fn hashNoise(p: vec3<f32>) -> f32 {
+      return ihash3(vec3<i32>(floor(p)));
     }
 
     fn phaseHG(cosTheta: f32, g: f32) -> f32 {
@@ -536,13 +481,12 @@ function createVolumeRaymarchShader() {
       hotGas: f32,
     ) -> vec3<f32> {
       let flow = position * 0.082 + vec3<f32>(time * 0.09, time * 0.18, -time * 0.06);
-      let bulk = valueNoise3D(flow + vec3<f32>(reaction * 2.1, density * 0.9, hotGas * 0.55));
-      let pocket = hashNoise3D(floor(flow * 2.4) + vec3<f32>(17.0, 9.0, 13.0));
-      let vent = hashNoise3D(floor(flow * vec3<f32>(1.2, 2.6, 1.4)) + vec3<f32>(5.0, 21.0, 11.0));
+      let bulk = smoothNoise(flow + vec3<f32>(reaction * 2.1, density * 0.9, hotGas * 0.55));
+      let pocket = hashNoise(floor(flow * 2.4) + vec3<f32>(17.0, 9.0, 13.0));
+      let vent = hashNoise(floor(flow * vec3<f32>(1.2, 2.6, 1.4)) + vec3<f32>(5.0, 21.0, 11.0));
       let cluster = clamp(bulk * 0.62 + pocket * 0.2 + vent * 0.1 + reaction * 0.06, 0.0, 1.0);
       let ridge = 1.0 - abs((bulk * 0.72 + vent * 0.28) * 2.0 - 1.0);
       let cellular = abs(bulk - pocket);
-
       return vec3<f32>(cluster, ridge, cellular);
     }
 
@@ -554,9 +498,9 @@ function createVolumeRaymarchShader() {
       hotGas: f32,
     ) -> f32 {
       let flow = position * 0.21 + vec3<f32>(-time * 0.035, time * 0.028, time * 0.018);
-      let broad = valueNoise3D(flow + vec3<f32>(density * 1.8, reaction * 2.2, hotGas * 1.1));
-      let crisp = hashNoise3D(floor(flow * 4.2) + vec3<f32>(7.0, 19.0, 3.0));
-      let streak = hashNoise3D(floor(flow * vec3<f32>(2.4, 4.8, 2.6)) + vec3<f32>(23.0, 11.0, 29.0));
+      let broad = smoothNoise(flow + vec3<f32>(density * 1.8, reaction * 2.2, hotGas * 1.1));
+      let crisp = hashNoise(floor(flow * 4.2) + vec3<f32>(7.0, 19.0, 3.0));
+      let streak = hashNoise(floor(flow * vec3<f32>(2.4, 4.8, 2.6)) + vec3<f32>(23.0, 11.0, 29.0));
       return clamp(broad * 0.58 + crisp * 0.24 + streak * 0.18, 0.0, 1.0);
     }
 
@@ -567,78 +511,49 @@ function createVolumeRaymarchShader() {
       detailedDensity: f32,
       hotGas: f32,
     ) -> f32 {
-      // 4-tap exponential shadow ray toward the light.
-      // Taps are spaced to cover a wider shadow cone — previously 2 taps were too
-      // close and created flat, direction-independent shading that looked grey.
-      let p1 = clamp(samplePosition + lightStep * 0.6,  vec3<f32>(0.0), sampleDimensions);
-      let p2 = clamp(samplePosition + lightStep * 1.4,  vec3<f32>(0.0), sampleDimensions);
-      let p3 = clamp(samplePosition + lightStep * 2.5,  vec3<f32>(0.0), sampleDimensions);
-      let p4 = clamp(samplePosition + lightStep * 4.0,  vec3<f32>(0.0), sampleDimensions);
-      let d1 = max(sampleDensity(p1) - 0.004, 0.0);
-      let d2 = max(sampleDensity(p2) - 0.004, 0.0);
-      let d3 = max(sampleDensity(p3) - 0.004, 0.0);
-      let d4 = max(sampleDensity(p4) - 0.004, 0.0);
-      // Hot gas opens up the optical depth slightly — fire clears its own shadow cone.
-      let opticalDepth = detailedDensity * 0.22 + d1 * 0.62 + d2 * 0.42 + d3 * 0.28 + d4 * 0.16
-                         - hotGas * 0.12;
+      // 3 nearest-neighbour density taps (was 4 trilinear — saves ~24 buffer reads).
+      // Taps still span a wide cone; nearest is fine for a shadow estimate.
+      let p1 = clamp(samplePosition + lightStep * 0.8,  vec3<f32>(0.0), sampleDimensions);
+      let p2 = clamp(samplePosition + lightStep * 2.0,  vec3<f32>(0.0), sampleDimensions);
+      let p3 = clamp(samplePosition + lightStep * 3.8,  vec3<f32>(0.0), sampleDimensions);
+      let d1 = max(readDensityNearest(p1) - 0.004, 0.0);
+      let d2 = max(readDensityNearest(p2) - 0.004, 0.0);
+      let d3 = max(readDensityNearest(p3) - 0.004, 0.0);
+      let opticalDepth = detailedDensity * 0.22 + d1 * 0.68 + d2 * 0.42 + d3 * 0.22 - hotGas * 0.12;
       return exp(-max(opticalDepth, 0.0) * 1.8);
     }
 
-    // Gather emissive radiance from nearby hot gas into a smoke voxel.
-    // This is the GI approximation: fire illuminates surrounding smoke with warm
-    // orange/white light, creating the cumulonimbus underglow effect.
+    // 4 nearest-neighbour GI probes (was 10 trilinear = ~80 reads; now 4 nearest = 4 reads).
+    // Fire-to-smoke GI operates at a scale where sub-voxel interpolation is invisible.
     fn gatherEmissiveRadiance(
       samplePosition: vec3<f32>,
       sampleDimensions: vec3<f32>,
       density: f32,
-      time: f32,
     ) -> vec3<f32> {
-      let r1 = sampleDimensions * 0.028;
-      let r2 = sampleDimensions * 0.072;
+      let r = sampleDimensions * 0.05;
+      let transmit = exp(-density * 2.6);
       var radiance = vec3<f32>(0.0);
 
-      // Use the existing trilinear sampling functions — they already clamp coords.
-      // Inner ring: 6 axis-aligned probes
-      let probePositions1 = array<vec3<f32>, 6>(
-        samplePosition + vec3<f32>( r1.x, 0.0,   0.0),
-        samplePosition + vec3<f32>(-r1.x, 0.0,   0.0),
-        samplePosition + vec3<f32>( 0.0,  r1.y,  0.0),
-        samplePosition + vec3<f32>( 0.0, -r1.y,  0.0),
-        samplePosition + vec3<f32>( 0.0,  0.0,   r1.z),
-        samplePosition + vec3<f32>( 0.0,  0.0,  -r1.z),
+      let offsets = array<vec3<f32>, 4>(
+        vec3<f32>( r.x,  r.y,  0.0),
+        vec3<f32>(-r.x,  r.y,  0.0),
+        vec3<f32>( 0.0, -r.y,  r.z),
+        vec3<f32>( 0.0, -r.y, -r.z),
       );
-      for (var i = 0u; i < 6u; i++) {
-        let p = clamp(probePositions1[i], vec3<f32>(0.0), sampleDimensions);
-        let pTemp  = sampleTemperature(p);
-        let pFuel  = sampleFuel(p);
-        let pReact = sampleReaction(p);
+      for (var i = 0u; i < 4u; i++) {
+        let p = clamp(samplePosition + offsets[i], vec3<f32>(0.0), sampleDimensions);
+        let coord = vec3<u32>(floor(p));
+        let idx = flatten(coord);
+        let pTemp  = temperatureField[idx];
+        let pFuel  = fuelField[idx];
+        let pReact = reactionField[idx];
         let pHot = clamp(pTemp * 1.4 + pFuel * 0.3 + pReact * 0.5, 0.0, 1.0);
         if (pHot > 0.04) {
           let emissive = firePalette(clamp(pTemp * 0.88 + pReact * 0.1, 0.0, 1.0));
-          let transmit = exp(-density * 2.2);
           radiance += emissive * pHot * transmit;
         }
       }
-      // Outer ring: 4 diagonal probes for the broad warm halo
-      let probePositions2 = array<vec3<f32>, 4>(
-        samplePosition + vec3<f32>( r2.x,  r2.y,  0.0),
-        samplePosition + vec3<f32>(-r2.x,  r2.y,  0.0),
-        samplePosition + vec3<f32>( 0.0,  -r2.y,  r2.z),
-        samplePosition + vec3<f32>( 0.0,  -r2.y, -r2.z),
-      );
-      for (var j = 0u; j < 4u; j++) {
-        let p = clamp(probePositions2[j], vec3<f32>(0.0), sampleDimensions);
-        let pTemp  = sampleTemperature(p);
-        let pFuel  = sampleFuel(p);
-        let pReact = sampleReaction(p);
-        let pHot = clamp(pTemp * 1.4 + pFuel * 0.3 + pReact * 0.5, 0.0, 1.0);
-        if (pHot > 0.04) {
-          let emissive = firePalette(clamp(pTemp * 0.88 + pReact * 0.1, 0.0, 1.0));
-          let transmit = exp(-density * 3.4);
-          radiance += emissive * pHot * transmit * 0.35;
-        }
-      }
-      return radiance * (1.0 / 6.0);
+      return radiance * 0.25;
     }
 
     @vertex
@@ -676,207 +591,210 @@ function createVolumeRaymarchShader() {
 
       bounds.x = max(bounds.x, 0.0);
 
-      let rayLength = bounds.y - bounds.x;
       let stepCount = u32(camera.renderMode.y);
-      let delta = rayLength / max(f32(stepCount), 1.0);
       let invExtent = 1.0 / (camera.volumeHalfExtents.xyz * 2.0);
       let sampleDimensions = sampleBounds();
-      let sampleRayDirection = rayDirection * invExtent * sampleDimensions;
+
+      // March entirely in voxel space — brick-skip math is exact here,
+      // no world↔voxel conversion error possible.
+      // voxRayDir: voxels advanced per unit of t (same t as world-space ray)
+      let voxRayDir = rayDirection * invExtent * sampleDimensions;
+      // voxDelta: voxel-space step size for one standard step
+      let voxDelta = length(voxRayDir) * (bounds.y - bounds.x) / max(f32(stepCount), 1.0);
+      // world-space step size for one standard voxel-space step
+      let worldDelta = (bounds.y - bounds.x) / max(f32(stepCount), 1.0);
+
       let lightDirection = normalize(camera.lightDir.xyz);
       let sampleLightStep = lightDirection * sampleDimensions * 0.036;
       let lightViewCos = clamp(dot(lightDirection, -rayDirection), -1.0, 1.0);
       let forwardScatter = phaseHG(lightViewCos, camera.scatter.x) * 18.0;
       let backwardScatter = phaseHG(lightViewCos, camera.scatter.y) * 8.0;
-      var positionRay = camera.position.xyz + rayDirection * bounds.x;
-      var travelled = 0.0;
+
+      // Start voxel position
+      var voxPos = (camera.position.xyz + rayDirection * bounds.x - boxMin) * invExtent * sampleDimensions;
+      var voxTravelled = 0.0;
+      let voxRayLength = length(voxRayDir) * (bounds.y - bounds.x);
       var accumulatedColor = vec3<f32>(0.0);
       var accumulatedAlpha = 0.0;
 
-      for (var index = 0u; index < stepCount && travelled <= rayLength; index += 1u) {
+      for (var index = 0u; index < stepCount && voxTravelled <= voxRayLength; index += 1u) {
         if (accumulatedAlpha > 0.985) {
           break;
         }
 
-        var stepDistance = delta;
-        let uvw = (positionRay - boxMin) * invExtent;
+        var voxStep = voxDelta;
+        let samplePosition = voxPos;
 
-        if (all(uvw >= vec3<f32>(0.0)) && all(uvw <= vec3<f32>(1.0))) {
-          let samplePosition = uvw * sampleDimensions;
-          if (isActiveSample(samplePosition)) {
-            let density = max(sampleDensity(samplePosition) - 0.005, 0.0);
-            let temperature = sampleTemperature(samplePosition);
-            let fuel = sampleFuel(samplePosition);
-            let reaction = sampleReaction(samplePosition);
-            let hotGas = clamp(temperature * 1.55 + fuel * 0.26 + reaction * 0.44, 0.0, 1.0);
+        // uvw from voxel position — exact, no rounding error
+        let uvw = samplePosition / sampleDimensions;
 
-            if (density > 0.001 || hotGas > 0.018) {
-              if (density < 0.014 && hotGas < 0.05) {
-                stepDistance = delta * 1.9;
-              } else {
-              let microDetail = cloudMicroDetail(samplePosition, camera.renderMode.z, density, reaction, hotGas);
-              let thermalPattern = thermalPocketPattern(samplePosition, camera.renderMode.z, density, reaction, hotGas);
-              let heatCore = smoothstep(0.1, 0.78, hotGas * 0.92 + reaction * 0.5);
-              let heatBreakup = smoothstep(0.34, 0.84, thermalPattern.x * 0.78 + thermalPattern.y * 0.22 + reaction * 0.08);
-              let hotPocket = clamp(heatCore * mix(0.72, 1.18, heatBreakup), 0.0, 1.0);
-              let coolCore = smoothstep(0.04, 0.7, density) *
-                (1.0 - smoothstep(0.34, 0.82, hotGas + reaction * 0.28));
-              let coolingPocket = coolCore * smoothstep(0.48, 0.92, 1.0 - thermalPattern.x + thermalPattern.z * 0.28);
-              let bodyPocket = smoothstep(0.22, 0.82, thermalPattern.y + microDetail * 0.32);
-              let densityErosion = smoothstep(0.2, 0.78, microDetail + bodyPocket * 0.35 + reaction * 0.14 + hotGas * 0.08);
-              let detailContrast = mix(0.46, 1.88, densityErosion) *
-                mix(0.84, 1.42, bodyPocket) *
-                mix(1.0, 1.26, coolingPocket);
-              let detailedDensity = max(pow(density, 0.92) * detailContrast, 0.0);
-              let contributionWeight = clamp(detailedDensity * 1.65 + hotGas * 2.1, 0.0, 1.0);
-              var densityGrad = vec3<f32>(0.0);
-              if (detailedDensity > 0.003 || hotGas > 0.03) {
-                densityGrad = densityGradient(samplePosition);
-              }
-              let gradLength = max(length(densityGrad), 0.0001);
-              var smokeNormal = vec3<f32>(0.0, 1.0, 0.0);
-              if (gradLength > 0.00011) {
-                smokeNormal = -densityGrad / gradLength;
-              }
+        if (isActiveSample(samplePosition)) {
+          // One merged trilinear pass — 32 reads instead of the old 128
+          let s = sampleAllFields(samplePosition);
+          let density = max(s.density - 0.005, 0.0);
+          let temperature = s.temperature;
+          let fuel = s.fuel;
+          let reaction = s.reaction;
+          let hotGas = clamp(temperature * 1.55 + fuel * 0.26 + reaction * 0.44, 0.0, 1.0);
 
-              // Volumetric phase-only lighting — no surface-normal dot products on a
-              // volumetric medium (that was the grey-blowout culprit).  Light is purely
-              // a function of how much reaches this voxel and from which angle.
-              let heightAmbient = smoothstep(0.02, 0.95, uvw.y);
-              let lightTransmission = sampleSmokeLightTransmittance(
-                samplePosition,
-                sampleDimensions,
-                sampleLightStep,
-                detailedDensity,
-                hotGas,
-              );
-              // Silhouette rim: smoke edges facing away from camera are back-lit.
-              // Use the gradient as a surface proxy ONLY for the rim term.
-              let rimFacing = 1.0 - clamp(dot(smokeNormal, -rayDirection), 0.0, 1.0);
-              let contourLight = pow(rimFacing, 5.2) * lightTransmission * 0.14;
-              let skyAmbient = mix(
-                vec3<f32>(0.008, 0.009, 0.012),
-                vec3<f32>(0.055, 0.065, 0.08),
-                heightAmbient,
-              );
-              // Phase scattering dominates — this is physically what volumetric lighting is.
-              // Back-scatter is intentionally weak (smoke is forward-scattering).
-              let phaseLight = lightTransmission * (0.08 + forwardScatter * 0.62 + backwardScatter * 0.08);
-              // A soft directional term using the gradient normal only as a secondary weight,
-              // not as the primary brightness — keeps dark sides actually dark.
-              let gradientBias = clamp(dot(smokeNormal, lightDirection) * 0.25 + 0.25, 0.0, 0.5);
-              let directionalLight = lightTransmission * gradientBias;
-              let totalLight = directionalLight + phaseLight + contourLight;
-              // Emissive GI: fire illuminates nearby smoke with warm orange/white radiance.
-              let emissiveGI = gatherEmissiveRadiance(samplePosition, sampleDimensions, detailedDensity, camera.renderMode.z);
-              let cloudDetail = clamp(gradLength * 7.0 + abs(microDetail - 0.5) * 2.2 + reaction * 0.24, 0.0, 1.0);
-              let smokeBase = smokePalette(detailedDensity, temperature, totalLight);
-              let creviceShade = 1.0 - cloudDetail * (1.0 - lightTransmission) * mix(0.34, 0.64, coolingPocket);
-              let sootShadow = 1.0 - smoothstep(0.16, 0.82, totalLight) * 0.46;
-              let pocketShadow = 1.0 - coolingPocket * (0.18 + cloudDetail * 0.24);
-              let sootColor = mix(
-                vec3<f32>(0.008, 0.008, 0.01),
-                vec3<f32>(0.09, 0.085, 0.08),
-                clamp(totalLight * 0.32 + temperature * 0.08, 0.0, 1.0),
-              );
-              let warmSmoke = smokeBase + vec3<f32>(0.16, 0.055, 0.016) * hotPocket * hotGas;
-              let phaseSmoke = mix(warmSmoke, sootColor, coolingPocket * 0.84);
-              let localHeat = clamp(temperature * 0.76 + fuel * 0.16 + reaction * 0.18, 0.0, 1.0);
-              let localHotSoot = smoothstep(0.1, 0.68, localHeat) *
-                smoothstep(0.04, 0.56, detailedDensity) *
-                smoothstep(0.18, 0.86, thermalPattern.x + bodyPocket * 0.24) *
-                (1.0 - coolingPocket * 0.55);
-              let emberColor = firePalette(clamp(localHeat * 0.88 + localHotSoot * 0.1, 0.0, 1.0));
-              let smokeIllumination = emberColor * localHotSoot *
-                (0.72 + forwardScatter * 0.44 + (1.0 - lightTransmission) * 1.82) *
-                (0.82 + detailedDensity * 1.92 + hotGas * 0.32);
-              let smokeLighting =
-                skyAmbient * (1.0 + localHotSoot * 0.42 + heatCore * 0.18) +
-                vec3<f32>(0.54, 0.61, 0.72) * totalLight +
-                // GI from nearby fire: warm orange fills the smoke around hot cores.
-                emissiveGI * (0.82 + coolingPocket * 0.44) * (1.0 - hotPocket * 0.35);
-              let heatedSmoke = phaseSmoke * smokeLighting * creviceShade * sootShadow * pocketShadow + smokeIllumination;
-              let heatIsland = smoothstep(0.04, 0.42, hotGas) * mix(0.45, 1.45, hotPocket);
-              let fireWindow = smoothstep(0.18, 0.72, hotGas + fuel * 0.18 + reaction * 0.16) *
-                mix(0.38, 0.82, hotPocket);
-              let crackMask = heatIsland *
-                smoothstep(0.32, 0.92, thermalPattern.y + bodyPocket * 0.26 + reaction * 0.08) *
-                (1.0 - smoothstep(0.86, 2.6, detailedDensity)) *
-                (1.0 - coolingPocket * 0.5);
-              let flameHeat = clamp(temperature * 0.86 + fuel * 0.1 + reaction * 0.08, 0.0, 1.0);
-              let coreVisibility = exp(-detailedDensity * mix(1.6, 0.52, hotPocket));
-              let coreRadiance = firePalette(flameHeat) * (flameHeat * (fuel * 0.42 + 0.38)) *
-                (reaction * 0.9 + 1.56) *
-                (1.64 + forwardScatter * 1.22) *
-                mix(0.88, 2.26, hotPocket) *
-                crackMask;
-              let topFade = 1.0 - smoothstep(0.88, 0.995, uvw.y);
-
-              stepDistance = delta * mix(1.08, 0.76, contributionWeight);
-
-              let smokeMass = detailedDensity * (1.24 + cloudDetail * 0.54 + coolingPocket * 0.18);
-              let smokeOpacity = (1.0 - exp(-smokeMass * stepDistance * 3.1)) * topFade;
-              let coreOcclusion = exp(-smokeMass * mix(1.45, 0.52, hotPocket));
-              let heatBloom = clamp(localHotSoot * 0.72 + fireWindow * 0.34 + hotGas * 0.18, 0.0, 1.0);
-              let heatReach = 1.0 - exp(-smokeMass * mix(0.82, 0.38, hotPocket));
-              let smokeLightCoupling = clamp(
-                heatReach * (2.1 + detailedDensity * 2.45 + localHotSoot * 1.04 + (1.0 - lightTransmission) * 1.82),
-                0.0,
-                6.2,
-              );
-              let coreSmokeLight = coreRadiance * smokeLightCoupling;
-              let directCoreLeak = coreRadiance * coreOcclusion * coreVisibility *
-                smoothstep(0.0, 0.22, 1.0 - detailedDensity) *
-                mix(0.05, 0.18, fireWindow);
-
-              var compositeColor = heatedSmoke + coreSmokeLight + directCoreLeak;
-              var opacity = max(smokeOpacity, detailedDensity * 0.08 * topFade);
-
-              let fireAlpha = 1.0 - exp(-hotGas * (fuel + reaction * 0.22 + 0.12) * stepDistance * mix(4.0, 7.0, hotPocket));
-              opacity = max(opacity, fireAlpha * 0.05 * topFade * mix(0.28, 0.56, coreVisibility));
-
-              if (camera.renderMode.x < 0.5) {
-                let directCoreGlow = smoothstep(0.06, 0.58, hotGas + fuel * 0.12 + reaction * 0.1) *
-                  (1.0 - smoothstep(0.18, 0.8, detailedDensity)) *
-                  mix(0.44, 0.92, hotPocket) * coreVisibility;
-                let hotSmokeGlow = localHotSoot * 0.74;
-
-                compositeColor = mix(
-                  heatedSmoke + coreSmokeLight,
-                  heatedSmoke + coreSmokeLight + emberColor * (hotSmokeGlow + directCoreGlow * 0.92) + directCoreLeak,
-                  clamp(heatBloom * 1.28 + directCoreGlow * 0.22, 0.0, 0.82),
-                );
-                opacity = max(opacity, smokeOpacity * mix(1.0, 1.12, heatBloom));
-              }
-
-              if (camera.renderMode.x > 0.5 && camera.renderMode.x < 1.5) {
-                compositeColor = mix(
-                  vec3<f32>(0.01, 0.01, 0.012),
-                  vec3<f32>(0.86, 0.88, 0.92),
-                  clamp(detailedDensity * 1.3, 0.0, 1.0),
-                );
-                opacity = 1.0 - exp(-detailedDensity * stepDistance * 10.5);
-              } else if (camera.renderMode.x >= 1.5) {
-                compositeColor = mix(
-                  vec3<f32>(0.03, 0.01, 0.0),
-                  vec3<f32>(1.0, 0.72, 0.22),
-                  clamp(fuel * 1.25, 0.0, 1.0),
-                );
-                opacity = 1.0 - exp(-fuel * stepDistance * 9.0);
-              }
-
-              accumulatedColor += (1.0 - accumulatedAlpha) * compositeColor * opacity;
-              accumulatedAlpha += (1.0 - accumulatedAlpha) * opacity;
-              }
+          if (density > 0.001 || hotGas > 0.018) {
+            if (density < 0.014 && hotGas < 0.05) {
+              voxStep = voxDelta * 1.9;
             } else {
-              stepDistance = delta * 1.35;
+            let microDetail = cloudMicroDetail(samplePosition, camera.renderMode.z, density, reaction, hotGas);
+            let thermalPattern = thermalPocketPattern(samplePosition, camera.renderMode.z, density, reaction, hotGas);
+            let heatCore = smoothstep(0.1, 0.78, hotGas * 0.92 + reaction * 0.5);
+            let heatBreakup = smoothstep(0.34, 0.84, thermalPattern.x * 0.78 + thermalPattern.y * 0.22 + reaction * 0.08);
+            let hotPocket = clamp(heatCore * mix(0.72, 1.18, heatBreakup), 0.0, 1.0);
+            let coolCore = smoothstep(0.04, 0.7, density) *
+              (1.0 - smoothstep(0.34, 0.82, hotGas + reaction * 0.28));
+            let coolingPocket = coolCore * smoothstep(0.48, 0.92, 1.0 - thermalPattern.x + thermalPattern.z * 0.28);
+            let bodyPocket = smoothstep(0.22, 0.82, thermalPattern.y + microDetail * 0.32);
+            let densityErosion = smoothstep(0.2, 0.78, microDetail + bodyPocket * 0.35 + reaction * 0.14 + hotGas * 0.08);
+            let detailContrast = mix(0.46, 1.88, densityErosion) *
+              mix(0.84, 1.42, bodyPocket) *
+              mix(1.0, 1.26, coolingPocket);
+            let detailedDensity = max(pow(density, 0.92) * detailContrast, 0.0);
+            let contributionWeight = clamp(detailedDensity * 1.65 + hotGas * 2.1, 0.0, 1.0);
+
+            let densityGrad = densityGradient(samplePosition);
+            let gradLength = max(length(densityGrad), 0.0001);
+            var smokeNormal = vec3<f32>(0.0, 1.0, 0.0);
+            if (gradLength > 0.00011) {
+              smokeNormal = -densityGrad / gradLength;
+            }
+
+            let heightAmbient = smoothstep(0.02, 0.95, uvw.y);
+            let lightTransmission = sampleSmokeLightTransmittance(
+              samplePosition,
+              sampleDimensions,
+              sampleLightStep,
+              detailedDensity,
+              hotGas,
+            );
+            let rimFacing = 1.0 - clamp(dot(smokeNormal, -rayDirection), 0.0, 1.0);
+            let contourLight = pow(rimFacing, 5.2) * lightTransmission * 0.14;
+            let skyAmbient = mix(
+              vec3<f32>(0.008, 0.009, 0.012),
+              vec3<f32>(0.055, 0.065, 0.08),
+              heightAmbient,
+            );
+            let phaseLight = lightTransmission * (0.08 + forwardScatter * 0.62 + backwardScatter * 0.08);
+            let gradientBias = clamp(dot(smokeNormal, lightDirection) * 0.25 + 0.25, 0.0, 0.5);
+            let directionalLight = lightTransmission * gradientBias;
+            let totalLight = directionalLight + phaseLight + contourLight;
+            let emissiveGI = gatherEmissiveRadiance(samplePosition, sampleDimensions, detailedDensity);
+            let cloudDetail = clamp(gradLength * 7.0 + abs(microDetail - 0.5) * 2.2 + reaction * 0.24, 0.0, 1.0);
+            let smokeBase = smokePalette(detailedDensity, temperature, totalLight);
+            let creviceShade = 1.0 - cloudDetail * (1.0 - lightTransmission) * mix(0.34, 0.64, coolingPocket);
+            let sootShadow = 1.0 - smoothstep(0.16, 0.82, totalLight) * 0.46;
+            let pocketShadow = 1.0 - coolingPocket * (0.18 + cloudDetail * 0.24);
+            let sootColor = mix(
+              vec3<f32>(0.008, 0.008, 0.01),
+              vec3<f32>(0.09, 0.085, 0.08),
+              clamp(totalLight * 0.32 + temperature * 0.08, 0.0, 1.0),
+            );
+            let warmSmoke = smokeBase + vec3<f32>(0.16, 0.055, 0.016) * hotPocket * hotGas;
+            let phaseSmoke = mix(warmSmoke, sootColor, coolingPocket * 0.84);
+            let localHeat = clamp(temperature * 0.76 + fuel * 0.16 + reaction * 0.18, 0.0, 1.0);
+            let localHotSoot = smoothstep(0.1, 0.68, localHeat) *
+              smoothstep(0.04, 0.56, detailedDensity) *
+              smoothstep(0.18, 0.86, thermalPattern.x + bodyPocket * 0.24) *
+              (1.0 - coolingPocket * 0.55);
+            let emberColor = firePalette(clamp(localHeat * 0.88 + localHotSoot * 0.1, 0.0, 1.0));
+            let smokeIllumination = emberColor * localHotSoot *
+              (0.72 + forwardScatter * 0.44 + (1.0 - lightTransmission) * 1.82) *
+              (0.82 + detailedDensity * 1.92 + hotGas * 0.32);
+            let smokeLighting =
+              skyAmbient * (1.0 + localHotSoot * 0.42 + heatCore * 0.18) +
+              vec3<f32>(0.54, 0.61, 0.72) * totalLight +
+              emissiveGI * (0.82 + coolingPocket * 0.44) * (1.0 - hotPocket * 0.35);
+            let heatedSmoke = phaseSmoke * smokeLighting * creviceShade * sootShadow * pocketShadow + smokeIllumination;
+            let heatIsland = smoothstep(0.04, 0.42, hotGas) * mix(0.45, 1.45, hotPocket);
+            let fireWindow = smoothstep(0.18, 0.72, hotGas + fuel * 0.18 + reaction * 0.16) *
+              mix(0.38, 0.82, hotPocket);
+            let crackMask = heatIsland *
+              smoothstep(0.32, 0.92, thermalPattern.y + bodyPocket * 0.26 + reaction * 0.08) *
+              (1.0 - smoothstep(0.86, 2.6, detailedDensity)) *
+              (1.0 - coolingPocket * 0.5);
+            let flameHeat = clamp(temperature * 0.86 + fuel * 0.1 + reaction * 0.08, 0.0, 1.0);
+            let coreVisibility = exp(-detailedDensity * mix(1.6, 0.52, hotPocket));
+            let coreRadiance = firePalette(flameHeat) * (flameHeat * (fuel * 0.42 + 0.38)) *
+              (reaction * 0.9 + 1.56) *
+              (1.64 + forwardScatter * 1.22) *
+              mix(0.88, 2.26, hotPocket) *
+              crackMask;
+            let topFade = 1.0 - smoothstep(0.88, 0.995, uvw.y);
+
+            // stepDistance in world units for opacity integral
+            let stepDistance = worldDelta * mix(1.08, 0.76, contributionWeight);
+            voxStep = voxDelta * mix(1.08, 0.76, contributionWeight);
+
+            let smokeMass = detailedDensity * (1.24 + cloudDetail * 0.54 + coolingPocket * 0.18);
+            let smokeOpacity = (1.0 - exp(-smokeMass * stepDistance * 3.1)) * topFade;
+            let coreOcclusion = exp(-smokeMass * mix(1.45, 0.52, hotPocket));
+            let heatBloom = clamp(localHotSoot * 0.72 + fireWindow * 0.34 + hotGas * 0.18, 0.0, 1.0);
+            let heatReach = 1.0 - exp(-smokeMass * mix(0.82, 0.38, hotPocket));
+            let smokeLightCoupling = clamp(
+              heatReach * (2.1 + detailedDensity * 2.45 + localHotSoot * 1.04 + (1.0 - lightTransmission) * 1.82),
+              0.0,
+              6.2,
+            );
+            let coreSmokeLight = coreRadiance * smokeLightCoupling;
+            let directCoreLeak = coreRadiance * coreOcclusion * coreVisibility *
+              smoothstep(0.0, 0.22, 1.0 - detailedDensity) *
+              mix(0.05, 0.18, fireWindow);
+
+            var compositeColor = heatedSmoke + coreSmokeLight + directCoreLeak;
+            var opacity = max(smokeOpacity, detailedDensity * 0.08 * topFade);
+
+            let fireAlpha = 1.0 - exp(-hotGas * (fuel + reaction * 0.22 + 0.12) * stepDistance * mix(4.0, 7.0, hotPocket));
+            opacity = max(opacity, fireAlpha * 0.05 * topFade * mix(0.28, 0.56, coreVisibility));
+
+            if (camera.renderMode.x < 0.5) {
+              let directCoreGlow = smoothstep(0.06, 0.58, hotGas + fuel * 0.12 + reaction * 0.1) *
+                (1.0 - smoothstep(0.18, 0.8, detailedDensity)) *
+                mix(0.44, 0.92, hotPocket) * coreVisibility;
+              let hotSmokeGlow = localHotSoot * 0.74;
+
+              compositeColor = mix(
+                heatedSmoke + coreSmokeLight,
+                heatedSmoke + coreSmokeLight + emberColor * (hotSmokeGlow + directCoreGlow * 0.92) + directCoreLeak,
+                clamp(heatBloom * 1.28 + directCoreGlow * 0.22, 0.0, 0.82),
+              );
+              opacity = max(opacity, smokeOpacity * mix(1.0, 1.12, heatBloom));
+            }
+
+            if (camera.renderMode.x > 0.5 && camera.renderMode.x < 1.5) {
+              compositeColor = mix(
+                vec3<f32>(0.01, 0.01, 0.012),
+                vec3<f32>(0.86, 0.88, 0.92),
+                clamp(detailedDensity * 1.3, 0.0, 1.0),
+              );
+              opacity = 1.0 - exp(-detailedDensity * stepDistance * 10.5);
+            } else if (camera.renderMode.x >= 1.5) {
+              compositeColor = mix(
+                vec3<f32>(0.03, 0.01, 0.0),
+                vec3<f32>(1.0, 0.72, 0.22),
+                clamp(fuel * 1.25, 0.0, 1.0),
+              );
+              opacity = 1.0 - exp(-fuel * stepDistance * 9.0);
+            }
+
+            accumulatedColor += (1.0 - accumulatedAlpha) * compositeColor * opacity;
+            accumulatedAlpha += (1.0 - accumulatedAlpha) * opacity;
             }
           } else {
-            stepDistance = max(distanceToNextBrickBoundary(samplePosition, sampleRayDirection), delta);
+            voxStep = voxDelta * 1.35;
           }
+        } else {
+          // Inactive brick — jump to next brick boundary in voxel space (exact, no conversion)
+          voxStep = max(voxelDistToNextBrick(samplePosition, voxRayDir), voxDelta);
         }
 
-        positionRay += rayDirection * stepDistance;
-        travelled += stepDistance;
+        // voxStep is in voxel-distance units; normalize voxRayDir to advance correctly
+        voxPos += normalize(voxRayDir) * voxStep;
+        voxTravelled += voxStep;
       }
 
       if (accumulatedAlpha < 0.01) {
