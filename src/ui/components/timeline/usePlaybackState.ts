@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SimulationHandle } from '../../../engine/core/types/platform'
 
 export function usePlaybackState(handle: SimulationHandle | null) {
-  const [isPlaying, setIsPlaying] = useState(true)
+  const [isPlaying, setIsPlaying] = useState(false)
   const [frameCount, setFrameCount] = useState(0)
   const frameRef = useRef(0)
   const rafRef = useRef<number | null>(null)
 
-  // Sync isPlaying with handle state whenever handle changes
+  // Sync isPlaying with handle state whenever handle arrives
   useEffect(() => {
     if (!handle) {
       setIsPlaying(false)
@@ -60,12 +60,10 @@ export function usePlaybackState(handle: SimulationHandle | null) {
     handle.reset()
     frameRef.current = 0
     setFrameCount(0)
-    // keep playing after reset
-    if (!isPlaying) {
-      handle.play()
-      setIsPlaying(true)
-    }
-  }, [handle, isPlaying])
+    // Stay paused after reset — user must explicitly press play
+    handle.pause()
+    setIsPlaying(false)
+  }, [handle])
 
   return { isPlaying, frameCount, togglePlayPause, reset }
 }

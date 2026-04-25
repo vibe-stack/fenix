@@ -43,6 +43,34 @@ fn sourcePulse(blastSource: ExplosionSource) -> f32 {
   return pulseGate * attack * decay;
 }
 
+// Returns the signed toroidal circulation velocity at a point.
+// Positive = inward radial component at the base, upward along axis in the column,
+// outward radial at the cap.  This is what sculpts the mushroom shape.
+fn toroidalVelocity(
+  offset: vec3<f32>,
+  liftDir: vec3<f32>,
+  radius: f32,
+  axisRatio: f32,
+  liftProgress: f32,
+  distanceRatio: f32,
+) -> vec3<f32> {
+  // Radial direction away from lift axis (in the plane perpendicular to liftDir)
+  let axisOffset = offset - liftDir * dot(offset, liftDir);
+  let axisLen = length(axisOffset);
+  let radialDir = select(vec3<f32>(0.0, 0.0, 1.0), axisOffset / axisLen, axisLen > 0.0001);
+
+  // Below the rising column: pull inward toward the axis (suction)
+  let baseInward = smoothstep(0.0, -0.6, liftProgress) *                       // below source centre
+                   smoothstep(2.2, 0.6, distanceRatio) *                        // within 2x radius
+                   (1.0 - smoothstep(0.0, 0.4, axisRatio));                     // not already on axis
+  // In the cap: push outward to form the mushroom crown
+  let capOutward = smoothstep(0.5, 1.2, liftProgress) *
+                   smoothstep(1.6, 0.7, distanceRatio) *
+                   (1.0 - smoothstep(0.0, 0.5, axisRatio));
+  let radialComponent = (-baseInward + capOutward) * radialDir;
+  return radialComponent;
+}
+
 fn hash31(p: vec3<f32>) -> f32 {
   return fract(sin(dot(p, vec3<f32>(127.1, 311.7, 74.7))) * 43758.5453123);
 }
@@ -174,10 +202,32 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         detailNoise - thermalNoise,
         0.5 - detailNoise,
       ) + vec3<f32>(0.0001));
+      // How much the hot core has "fired" — ramps from 0 to 1 during blastGate,
+      // stays 1 for the early plume phase, then fades.
+      let coreFireProgress = blastGate * smoothstep(0.0, 0.7, blastAge) +
+        plumeGate * exp(-plumeAge * 2.5);
+
+      // Toroidal circulation that sculpts the mushroom: base smoke is sucked inward
+      // and up, cap smoke spreads outward.  Scaled by liftImpulse so users control it.
+      let toroid = toroidalVelocity(offset, liftDirection, radius, axisRatio, liftProgress, distanceRatio);
+      let toroidStrength = coreFireProgress * liftImpulse * 0.28 *
+        smoothstep(0.0, 0.15, distanceRatio);  // zero exactly at center to avoid instability
+
+      // Pre-smoke is forcefully cleared from the hot interior and the rising column.
+      // The clearing is much stronger than before so the hot core can actually break free.
       let heatVent = smoothstep(5.0, 15.0, blastSource.yields.y) *
         (hotFlash * 1.35 + updraftCore * 0.28) *
         (0.45 + heatMask * 0.55);
-      density = clamp01(max(0.0, density - heatVent * params.deltaTime * 7.2) +
+      // Extra clearing: once the blast fires, pull density out of the lower column
+      // so the dark pre-smoke orb actually lifts and implodes rather than sitting still.
+      let columnClear = coreFireProgress *
+        exp(-axisRatio * axisRatio * 12.0) *                   // along the central axis
+        smoothstep(0.5, -0.2, liftProgress) *                  // below centre of source
+        (1.0 - smoothstep(0.1, 0.6, hotFlash));                // don't double-clear the hot core itself
+
+      density = clamp01(max(0.0, density
+          - heatVent * params.deltaTime * 11.0
+          - columnClear * params.deltaTime * 6.5) +
         smokeRelease * blastSource.yields.x * params.deltaTime);
       temperature = clamp01(temperature + (hotFlash * 1.18 + updraftCore * blastSource.shape.y * 0.08) *
         blastSource.yields.y * params.deltaTime);
@@ -191,6 +241,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
       velocity += params.wind.xyz * coolingSmoke * params.wind.w * params.deltaTime * 0.9;
       velocity += liftDirection * (core * liftImpulse * (flashPulse * 0.32 + plumeGate * (1.0 - plumeAge) * 0.36) +
         updraftCore * blastSource.shape.z * 0.42 + coolingSmoke * liftImpulse * 0.22) * params.deltaTime;
+      // Toroidal mushroom circulation — this is what pulls the base smoke ring inward
+      // and fans the cap outward.  Applied during and after the blast fires.
+      velocity += toroid * toroidStrength * params.deltaTime;
     }
   }
 

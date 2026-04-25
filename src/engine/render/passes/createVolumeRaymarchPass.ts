@@ -486,11 +486,14 @@ function createVolumeRaymarchShader() {
 
     fn smokePalette(density: f32, temperature: f32, lightAmount: f32) -> vec3<f32> {
       let warmTint = clamp(temperature * 0.5, 0.0, 1.0);
-      let cloudBrightness = clamp(lightAmount * 0.55 + density * 0.12, 0.0, 1.0);
+      // Use a non-linear brightness curve so lightly-lit smoke stays dark/charcoal
+      // and only genuinely bright areas (direct sun + clear path) go grey.
+      // Previously the linear mix made everything blow out to grey at moderate light.
+      let cloudBrightness = clamp(pow(max(lightAmount, 0.0), 1.65) * 0.48 + density * 0.06, 0.0, 1.0);
       return mix(
-        vec3<f32>(0.018, 0.02, 0.024),
-        vec3<f32>(0.16, 0.17, 0.18) + warmTint * vec3<f32>(0.16, 0.065, 0.02),
-        clamp(cloudBrightness + temperature * 0.12, 0.0, 1.0),
+        vec3<f32>(0.010, 0.011, 0.013),
+        vec3<f32>(0.13, 0.135, 0.14) + warmTint * vec3<f32>(0.14, 0.055, 0.012),
+        clamp(cloudBrightness + temperature * 0.08, 0.0, 1.0),
       );
     }
 
@@ -564,12 +567,78 @@ function createVolumeRaymarchShader() {
       detailedDensity: f32,
       hotGas: f32,
     ) -> f32 {
-      let nearProbe = clamp(samplePosition + lightStep * 0.75, vec3<f32>(0.0), sampleDimensions);
-      let farProbe = clamp(samplePosition + lightStep * 1.65, vec3<f32>(0.0), sampleDimensions);
-      let nearDensity = max(sampleDensity(nearProbe) - 0.004, 0.0);
-      let farDensity = max(sampleDensity(farProbe) - 0.004, 0.0);
-      let opticalDepth = detailedDensity * 0.28 + nearDensity * 0.72 + farDensity * 0.46 - hotGas * 0.08;
-      return exp(-max(opticalDepth, 0.0) * 1.35);
+      // 4-tap exponential shadow ray toward the light.
+      // Taps are spaced to cover a wider shadow cone — previously 2 taps were too
+      // close and created flat, direction-independent shading that looked grey.
+      let p1 = clamp(samplePosition + lightStep * 0.6,  vec3<f32>(0.0), sampleDimensions);
+      let p2 = clamp(samplePosition + lightStep * 1.4,  vec3<f32>(0.0), sampleDimensions);
+      let p3 = clamp(samplePosition + lightStep * 2.5,  vec3<f32>(0.0), sampleDimensions);
+      let p4 = clamp(samplePosition + lightStep * 4.0,  vec3<f32>(0.0), sampleDimensions);
+      let d1 = max(sampleDensity(p1) - 0.004, 0.0);
+      let d2 = max(sampleDensity(p2) - 0.004, 0.0);
+      let d3 = max(sampleDensity(p3) - 0.004, 0.0);
+      let d4 = max(sampleDensity(p4) - 0.004, 0.0);
+      // Hot gas opens up the optical depth slightly — fire clears its own shadow cone.
+      let opticalDepth = detailedDensity * 0.22 + d1 * 0.62 + d2 * 0.42 + d3 * 0.28 + d4 * 0.16
+                         - hotGas * 0.12;
+      return exp(-max(opticalDepth, 0.0) * 1.8);
+    }
+
+    // Gather emissive radiance from nearby hot gas into a smoke voxel.
+    // This is the GI approximation: fire illuminates surrounding smoke with warm
+    // orange/white light, creating the cumulonimbus underglow effect.
+    fn gatherEmissiveRadiance(
+      samplePosition: vec3<f32>,
+      sampleDimensions: vec3<f32>,
+      density: f32,
+      time: f32,
+    ) -> vec3<f32> {
+      let r1 = sampleDimensions * 0.028;
+      let r2 = sampleDimensions * 0.072;
+      var radiance = vec3<f32>(0.0);
+
+      // Use the existing trilinear sampling functions — they already clamp coords.
+      // Inner ring: 6 axis-aligned probes
+      let probePositions1 = array<vec3<f32>, 6>(
+        samplePosition + vec3<f32>( r1.x, 0.0,   0.0),
+        samplePosition + vec3<f32>(-r1.x, 0.0,   0.0),
+        samplePosition + vec3<f32>( 0.0,  r1.y,  0.0),
+        samplePosition + vec3<f32>( 0.0, -r1.y,  0.0),
+        samplePosition + vec3<f32>( 0.0,  0.0,   r1.z),
+        samplePosition + vec3<f32>( 0.0,  0.0,  -r1.z),
+      );
+      for (var i = 0u; i < 6u; i++) {
+        let p = clamp(probePositions1[i], vec3<f32>(0.0), sampleDimensions);
+        let pTemp  = sampleTemperature(p);
+        let pFuel  = sampleFuel(p);
+        let pReact = sampleReaction(p);
+        let pHot = clamp(pTemp * 1.4 + pFuel * 0.3 + pReact * 0.5, 0.0, 1.0);
+        if (pHot > 0.04) {
+          let emissive = firePalette(clamp(pTemp * 0.88 + pReact * 0.1, 0.0, 1.0));
+          let transmit = exp(-density * 2.2);
+          radiance += emissive * pHot * transmit;
+        }
+      }
+      // Outer ring: 4 diagonal probes for the broad warm halo
+      let probePositions2 = array<vec3<f32>, 4>(
+        samplePosition + vec3<f32>( r2.x,  r2.y,  0.0),
+        samplePosition + vec3<f32>(-r2.x,  r2.y,  0.0),
+        samplePosition + vec3<f32>( 0.0,  -r2.y,  r2.z),
+        samplePosition + vec3<f32>( 0.0,  -r2.y, -r2.z),
+      );
+      for (var j = 0u; j < 4u; j++) {
+        let p = clamp(probePositions2[j], vec3<f32>(0.0), sampleDimensions);
+        let pTemp  = sampleTemperature(p);
+        let pFuel  = sampleFuel(p);
+        let pReact = sampleReaction(p);
+        let pHot = clamp(pTemp * 1.4 + pFuel * 0.3 + pReact * 0.5, 0.0, 1.0);
+        if (pHot > 0.04) {
+          let emissive = firePalette(clamp(pTemp * 0.88 + pReact * 0.1, 0.0, 1.0));
+          let transmit = exp(-density * 3.4);
+          radiance += emissive * pHot * transmit * 0.35;
+        }
+      }
+      return radiance * (1.0 / 6.0);
     }
 
     @vertex
@@ -669,8 +738,9 @@ function createVolumeRaymarchShader() {
                 smokeNormal = -densityGrad / gradLength;
               }
 
-              let keyDiffuse = clamp(dot(smokeNormal, lightDirection) * 0.5 + 0.5, 0.0, 1.0);
-              let fillDiffuse = clamp(dot(smokeNormal, normalize(vec3<f32>(0.55, 0.32, -0.62))) * 0.5 + 0.5, 0.0, 1.0);
+              // Volumetric phase-only lighting — no surface-normal dot products on a
+              // volumetric medium (that was the grey-blowout culprit).  Light is purely
+              // a function of how much reaches this voxel and from which angle.
               let heightAmbient = smoothstep(0.02, 0.95, uvw.y);
               let lightTransmission = sampleSmokeLightTransmittance(
                 samplePosition,
@@ -679,15 +749,25 @@ function createVolumeRaymarchShader() {
                 detailedDensity,
                 hotGas,
               );
-              let contourLight = pow(1.0 - clamp(dot(smokeNormal, -rayDirection), 0.0, 1.0), 4.8) * lightTransmission * 0.18;
-              let nightAmbient = mix(
-                vec3<f32>(0.012, 0.013, 0.016),
-                vec3<f32>(0.08, 0.092, 0.11),
+              // Silhouette rim: smoke edges facing away from camera are back-lit.
+              // Use the gradient as a surface proxy ONLY for the rim term.
+              let rimFacing = 1.0 - clamp(dot(smokeNormal, -rayDirection), 0.0, 1.0);
+              let contourLight = pow(rimFacing, 5.2) * lightTransmission * 0.14;
+              let skyAmbient = mix(
+                vec3<f32>(0.008, 0.009, 0.012),
+                vec3<f32>(0.055, 0.065, 0.08),
                 heightAmbient,
               );
-              let phaseLight = lightTransmission * (0.16 + forwardScatter * 0.54 + backwardScatter * 0.16);
-              let directionalLight = lightTransmission * (keyDiffuse * 0.78 + fillDiffuse * 0.22);
+              // Phase scattering dominates — this is physically what volumetric lighting is.
+              // Back-scatter is intentionally weak (smoke is forward-scattering).
+              let phaseLight = lightTransmission * (0.08 + forwardScatter * 0.62 + backwardScatter * 0.08);
+              // A soft directional term using the gradient normal only as a secondary weight,
+              // not as the primary brightness — keeps dark sides actually dark.
+              let gradientBias = clamp(dot(smokeNormal, lightDirection) * 0.25 + 0.25, 0.0, 0.5);
+              let directionalLight = lightTransmission * gradientBias;
               let totalLight = directionalLight + phaseLight + contourLight;
+              // Emissive GI: fire illuminates nearby smoke with warm orange/white radiance.
+              let emissiveGI = gatherEmissiveRadiance(samplePosition, sampleDimensions, detailedDensity, camera.renderMode.z);
               let cloudDetail = clamp(gradLength * 7.0 + abs(microDetail - 0.5) * 2.2 + reaction * 0.24, 0.0, 1.0);
               let smokeBase = smokePalette(detailedDensity, temperature, totalLight);
               let creviceShade = 1.0 - cloudDetail * (1.0 - lightTransmission) * mix(0.34, 0.64, coolingPocket);
@@ -710,8 +790,10 @@ function createVolumeRaymarchShader() {
                 (0.72 + forwardScatter * 0.44 + (1.0 - lightTransmission) * 1.82) *
                 (0.82 + detailedDensity * 1.92 + hotGas * 0.32);
               let smokeLighting =
-                nightAmbient * (1.0 + localHotSoot * 0.72 + heatCore * 0.32) +
-                vec3<f32>(0.54, 0.61, 0.72) * totalLight;
+                skyAmbient * (1.0 + localHotSoot * 0.42 + heatCore * 0.18) +
+                vec3<f32>(0.54, 0.61, 0.72) * totalLight +
+                // GI from nearby fire: warm orange fills the smoke around hot cores.
+                emissiveGI * (0.82 + coolingPocket * 0.44) * (1.0 - hotPocket * 0.35);
               let heatedSmoke = phaseSmoke * smokeLighting * creviceShade * sootShadow * pocketShadow + smokeIllumination;
               let heatIsland = smoothstep(0.04, 0.42, hotGas) * mix(0.45, 1.45, hotPocket);
               let fireWindow = smoothstep(0.18, 0.72, hotGas + fuel * 0.18 + reaction * 0.16) *

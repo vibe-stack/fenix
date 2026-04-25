@@ -5,7 +5,7 @@ import { SectionDivider } from '../../common/SectionDivider'
 
 export function AdvectionNodeInspector() {
   const snap = useSnapshot(nodeStore)
-  const { mode } = snap.nodes['advection']
+  const { mode } = snap.advection
 
   const options = [
     { value: 'maccormack', label: 'MacCormack', desc: 'Higher accuracy, better small-scale detail' },
@@ -20,7 +20,7 @@ export function AdvectionNodeInspector() {
           <button
             key={opt.value}
             type="button"
-            onClick={() => { nodeStore.nodes['advection'].mode = opt.value }}
+            onClick={() => { nodeStore.advection.mode = opt.value }}
             className={`px-3 py-2.5 text-left transition-colors ${
               mode === opt.value
                 ? 'bg-(--fenix-active)'

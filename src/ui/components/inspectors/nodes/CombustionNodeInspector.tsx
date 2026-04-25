@@ -3,16 +3,14 @@ import { nodeStore } from '../../../../store/node-store/nodeStore'
 import { Panel } from '../../panels/Panel'
 import { SliderRow } from '../../common/SliderRow'
 import { SectionDivider } from '../../common/SectionDivider'
+import type { CombustionNodeProps } from '../../../../engine/graph/schema/nodeProps'
 
 export function CombustionNodeInspector() {
   const snap = useSnapshot(nodeStore)
-  const props = snap.nodes['combustion']
+  const props = snap.combustion
 
-  function set<K extends keyof typeof nodeStore.nodes['combustion']>(
-    key: K,
-    value: typeof nodeStore.nodes['combustion'][K],
-  ) {
-    (nodeStore.nodes['combustion'] as Record<string, unknown>)[key] = value
+  function set<K extends keyof CombustionNodeProps>(key: K, value: CombustionNodeProps[K]) {
+    (nodeStore.combustion as Record<string, unknown>)[key] = value
   }
 
   return (

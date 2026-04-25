@@ -84,6 +84,49 @@ export const nodeStore = proxy<NodeStoreState>({
   },
 })
 
+let emitterCounter = nodeStore.emitters.length
+
+export function addEmitter(label: string): string {
+  const id = `emitter-${emitterCounter++}`
+  nodeStore.emitters.push({
+    id,
+    label,
+    props: {
+      positionX: 0.5, positionY: 0.3, positionZ: 0.5,
+      radius: 0.06,
+      startTime: 0,
+      smokeLeadTime: 0.4,
+      blastDuration: 0.3,
+      plumeDuration: 3.0,
+      densityYield: 6,
+      heatYield: 8,
+      fuelYield: 6,
+      reactionYield: 3,
+      radialImpulse: 30,
+      liftImpulse: 12,
+      liftDirX: 0, liftDirY: 1, liftDirZ: 0,
+      turbulence: 4,
+      crumbleStrength: 6,
+      heatPatchiness: 0.6,
+      patchScale: 8,
+      coreHeat: 0.3,
+      coreLift: 8,
+      seed: Math.floor(Math.random() * 65536),
+    },
+  })
+  return id
+}
+
+export function removeEmitter(id: string) {
+  const idx = nodeStore.emitters.findIndex((e) => e.id === id)
+  if (idx !== -1) {
+    nodeStore.emitters.splice(idx, 1)
+  }
+  if (nodeStore.selectedId === id) {
+    nodeStore.selectedId = null
+  }
+}
+
 // Helpers for working with selected node
 export type SelectedKind =
   | { kind: 'emitter'; instance: EmitterInstance }

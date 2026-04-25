@@ -74,17 +74,20 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     this.controls = controls
     this.simulation = simulation
     this.raymarchPass = raymarchPass
-    this.paused = false
+    this.paused = true
     this.simulationHandle = this.buildHandle(simulation)
 
     this.resizeObserver = new ResizeObserver(() => {
       this.resize()
+      // Redraw after resize so the canvas matches even while paused
+      this.scheduleFrame()
     })
     this.resizeObserver.observe(container)
 
     this.resize()
     this.lastFrameTime = performance.now()
-    this.animationFrameId = window.requestAnimationFrame(this.renderFrame)
+    // Render one frame so the canvas isn't blank, then stop — loop only runs while playing
+    this.scheduleFrame()
   }
 
   getSimulationHandle(): SimulationHandle | null {
@@ -115,6 +118,12 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     this.container = null
   }
 
+  private scheduleFrame() {
+    if (this.animationFrameId === null) {
+      this.animationFrameId = window.requestAnimationFrame(this.renderFrame)
+    }
+  }
+
   private buildHandle(simulation: CombustionVolumeSimulation): SimulationHandle {
     return {
       getPlaybackState: () => (this.paused ? 'paused' : 'playing'),
@@ -122,13 +131,17 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
         if (this.paused) {
           this.paused = false
           this.lastFrameTime = performance.now()
+          this.scheduleFrame()
         }
       },
       pause: () => {
+        // Don't cancel the RAF here — let renderFrame draw one final frame then stop itself
         this.paused = true
       },
       reset: () => {
         simulation.reset()
+        // Redraw the cleared state even while paused
+        this.scheduleFrame()
       },
       setWindDirection: (x, y, z) => simulation.setRuntimeParams({ wind: [x, y, z] }),
       setWindStrength: (v) => simulation.setRuntimeParams({ windStrength: v }),
@@ -154,21 +167,23 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
   }
 
   private readonly renderFrame = (time: number) => {
+    this.animationFrameId = null
+
     if (!this.gpu || !this.simulation || !this.raymarchPass || !this.controls) {
       return
     }
 
     const elapsedSeconds = time * 0.001
     const deltaSeconds = Math.max(1 / 240, Math.min((time - this.lastFrameTime) * 0.001, 1 / 20))
-    const encoder = this.gpu.device.createCommandEncoder({
-      label: 'raw-webgpu-volume-frame',
-    })
+    const encoder = this.gpu.device.createCommandEncoder({ label: 'raw-webgpu-volume-frame' })
     const view = this.gpu.context.getCurrentTexture().createView()
     const camera = this.controls.getSnapshot()
 
     if (!this.paused) {
       this.simulation.step(encoder, elapsedSeconds, deltaSeconds)
+      this.lastFrameTime = time
     }
+
     this.raymarchPass.render(
       encoder,
       view,
@@ -181,9 +196,9 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     )
     this.gpu.device.queue.submit([encoder.finish()])
 
+    // Only schedule the next frame when playing — paused draws one frame then stops
     if (!this.paused) {
-      this.lastFrameTime = time
+      this.scheduleFrame()
     }
-    this.animationFrameId = window.requestAnimationFrame(this.renderFrame)
   }
 }
