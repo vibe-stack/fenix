@@ -485,14 +485,13 @@ function createVolumeRaymarchShader() {
       return mix(mix(mix(ember, red, redMix), orange, orangeMix), whiteHot, whiteMix);
     }
 
-    fn smokePalette(density: f32, temperature: f32, lightAmount: f32) -> vec3<f32> {
+    fn smokeAlbedo(density: f32, temperature: f32, hotGas: f32) -> vec3<f32> {
       let warmTint = clamp(temperature * 0.38, 0.0, 1.0);
-      let shade = clamp(pow(max(lightAmount, 0.0), 1.45) * 0.64 + density * 0.05, 0.0, 1.0);
-      return mix(
-        vec3<f32>(0.008, 0.009, 0.011),
-        vec3<f32>(0.12, 0.126, 0.132) + warmTint * vec3<f32>(0.08, 0.028, 0.008),
-        shade,
-      );
+      let soot = smoothstep(0.16, 0.9, density) * (1.0 - smoothstep(0.2, 0.74, hotGas));
+      let coolSmoke = vec3<f32>(0.26, 0.275, 0.295);
+      let denseSoot = vec3<f32>(0.04, 0.041, 0.045);
+      let warmSmoke = vec3<f32>(0.36, 0.27, 0.18);
+      return mix(mix(coolSmoke, denseSoot, soot * 0.86), warmSmoke, warmTint * (0.35 + hotGas * 0.45));
     }
 
     fn phaseHG(cosTheta: f32, g: f32) -> f32 {
@@ -545,8 +544,15 @@ function createVolumeRaymarchShader() {
       let d1 = max(readDensityNearest(p1) - 0.004, 0.0);
       let d2 = max(readDensityNearest(p2) - 0.004, 0.0);
       let d3 = max(readDensityNearest(p3) - 0.004, 0.0);
-      let opticalDepth = density * 0.18 + d1 * 0.72 + d2 * 0.42 + d3 * 0.22 - hotGas * 0.08;
-      return exp(-max(opticalDepth, 0.0) * 1.6);
+      let opticalDepth = density * 0.34 + d1 * 1.15 + d2 * 0.72 + d3 * 0.4 - hotGas * 0.06;
+      return exp(-max(opticalDepth, 0.0) * 2.15);
+    }
+
+    fn thermalScatter(temperature: f32, fuel: f32, reaction: f32, density: f32) -> vec3<f32> {
+      let heat = clamp(temperature * 1.25 + fuel * 0.18 + reaction * 0.34, 0.0, 1.0);
+      let flame = clamp(temperature * 0.9 + fuel * 0.12 + reaction * 0.18, 0.0, 1.0);
+      let smokeCatch = smoothstep(0.012, 0.38, density);
+      return firePalette(flame) * heat * heat * smokeCatch * 0.18;
     }
 
     @vertex
@@ -646,28 +652,31 @@ function createVolumeRaymarchShader() {
                 }
 
                 let directionToLight = lightDirection(lightIndex, worldPosition);
-                let power = lightIntensity(lightIndex) * lightAttenuation(lightIndex, worldPosition);
+                let rawPower = lightIntensity(lightIndex) * lightAttenuation(lightIndex, worldPosition);
+                let power = rawPower / (1.0 + rawPower * 0.18);
                 let color = lightColor(lightIndex);
                 let lightViewCos = clamp(dot(directionToLight, -rayDirection), -1.0, 1.0);
-                let forwardScatter = phaseHG(lightViewCos, camera.scatter.x) * 5.0 * power;
-                let backwardScatter = phaseHG(lightViewCos, camera.scatter.y) * 2.0 * power;
-                let directional = clamp(dot(smokeNormal, directionToLight) * 0.5 + 0.5, 0.0, 1.0) * power;
-                let scatterLight = (forwardScatter + backwardScatter) * mix(0.35, 0.8, hotGas);
+                let forwardScatter = phaseHG(lightViewCos, camera.scatter.x) * 5.2 * power;
+                let backwardScatter = phaseHG(lightViewCos, camera.scatter.y) * 1.55 * power;
+                let normalFacing = clamp(dot(smokeNormal, directionToLight) * 0.5 + 0.5, 0.0, 1.0);
+                let surfaceTerm = pow(normalFacing, 1.35) * mix(1.0, 0.56, smoothstep(0.16, 0.9, detailedDensity));
+                let rimTerm = pow(1.0 - abs(dot(smokeNormal, -rayDirection)), 2.4) *
+                  pow(clamp(dot(directionToLight, -rayDirection) * 0.5 + 0.5, 0.0, 1.0), 1.2);
+                let directional = (surfaceTerm * 0.42 + rimTerm * 0.22) * power;
+                let scatterLight = (forwardScatter + backwardScatter) * mix(0.36, 0.74, hotGas);
                 let transmission = select(primaryTransmission, 1.0, lightIndex > 0u);
                 totalLightColor += color * transmission * (directional + scatterLight);
               }
 
-              let totalLight = lightAmount(totalLightColor);
-              let ambientAmount = select(0.012, 0.032 + totalLight * 0.06, activeLightCount > 0u);
-              let ambientColor = vec3<f32>(0.006, 0.007, 0.009) * ambientAmount;
-              let smokeBase = smokePalette(detailedDensity, temperature, totalLight);
-              let coolness = smoothstep(0.05, 0.6, detailedDensity) * (1.0 - smoothstep(0.28, 0.78, hotGas));
-              let sootColor = mix(
-                vec3<f32>(0.01, 0.01, 0.012),
-                vec3<f32>(0.08, 0.082, 0.086),
-                clamp(totalLight * 0.3 + temperature * 0.04, 0.0, 1.0),
-              );
-              let litSmoke = mix(smokeBase, sootColor, coolness * 0.68) * (ambientColor + totalLightColor);
+              let tonemappedLight = vec3<f32>(1.0) - exp(-totalLightColor * 0.72);
+              let ambientLight = vec3<f32>(0.045, 0.048, 0.052);
+              let smokeColor = smokeAlbedo(detailedDensity, temperature, hotGas);
+              let densityAbsorption = mix(0.92, 0.34, smoothstep(0.26, 1.05, detailedDensity));
+              let heatScatter = thermalScatter(temperature, fuel, reaction, detailedDensity);
+              let litSmoke = smokeColor * ambientLight +
+                smokeColor * tonemappedLight * densityAbsorption +
+                tonemappedLight * smoothstep(0.018, 0.22, detailedDensity) * 0.18 +
+                heatScatter;
               let flameHeat = clamp(temperature * 0.9 + fuel * 0.14 + reaction * 0.16, 0.0, 1.0);
               let emissive = firePalette(flameHeat) * hotGas * (0.48 + fuel * 0.16 + reaction * 0.24);
               let contribution = clamp(detailedDensity * 1.35 + hotGas * 1.25, 0.0, 1.0);
@@ -675,7 +684,7 @@ function createVolumeRaymarchShader() {
               voxStep = voxDelta * mix(1.02, 0.76, contribution);
 
               var compositeColor = litSmoke + emissive;
-              var opacity = (1.0 - exp(-(detailedDensity * 3.0 + hotGas * 0.65) * stepDistance)) * topFade;
+              var opacity = (1.0 - exp(-(detailedDensity * 4.75 + hotGas * 0.42) * stepDistance)) * topFade;
 
               if (camera.renderMode.x > 0.5 && camera.renderMode.x < 1.5) {
                 compositeColor = mix(

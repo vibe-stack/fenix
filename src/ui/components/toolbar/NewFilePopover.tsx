@@ -3,7 +3,6 @@ import {
   clonePresetRuntimeParams,
   getNewFilePreset,
   newFilePresets,
-  type NewFilePresetId,
 } from '../../../editor/presets/newFilePresets'
 import { useSimulationHandle } from '../../../features/viewport/SimulationHandleContext'
 import { loadEmitterPreset, loadLightPreset, nodeStore } from '../../../store/node-store/nodeStore'
@@ -15,7 +14,7 @@ export function NewFilePopover() {
   const handle = useSimulationHandle()
   const [open, setOpen] = useState(false)
 
-  function applyPreset(presetId: NewFilePresetId) {
+  function applyPreset(presetId: string) {
     const preset = getNewFilePreset(presetId)
 
     loadEmitterPreset(preset)

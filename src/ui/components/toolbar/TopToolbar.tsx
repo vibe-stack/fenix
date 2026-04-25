@@ -4,6 +4,7 @@ import type { ViewportShadingMode } from '../../../editor/models/workspace'
 import { useEditorDispatch, useEditorStore } from '../../hooks/useEditorStore'
 import { BackgroundPopover } from './BackgroundPopover'
 import { ExportPopover } from './ExportPopover'
+import { GraphFilePopover } from './GraphFilePopover'
 import { NewFilePopover } from './NewFilePopover'
 
 interface TopToolbarProps {
@@ -110,6 +111,10 @@ export function TopToolbar({ diagnostics }: TopToolbarProps) {
       <div className="h-4 w-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
 
       <NewFilePopover />
+
+      <div className="h-4 w-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
+      <GraphFilePopover />
 
       <div className="h-4 w-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
 

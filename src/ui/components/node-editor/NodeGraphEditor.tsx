@@ -114,6 +114,7 @@ export function NodeGraphEditor() {
       style={{ width: '100%', height: '100%', outline: 'none' }}
       onKeyDown={onKeyDown}
       onMouseEnter={(e) => (e.currentTarget as HTMLDivElement).focus()}
+      className="dark"
       // biome-ignore lint: div needs tabIndex to receive keyboard events
       tabIndex={-1}
     >
@@ -132,6 +133,7 @@ export function NodeGraphEditor() {
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.3}
         maxZoom={2}
+        colorMode="dark"
         proOptions={{ hideAttribution: true }}
         style={{ background: 'var(--fenix-bg)' }}
       >

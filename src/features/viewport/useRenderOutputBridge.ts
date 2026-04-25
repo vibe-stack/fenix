@@ -39,11 +39,8 @@ export function useRenderOutputBridge(handle: SimulationHandle | null) {
     // Push immediately on mount
     pushRenderParams(handle)
 
-    // Push whenever render output settings, lights, or graph light connections change.
-    const unsubRenderOutput = subscribe(nodeStore.renderOutput, () => {
-      pushRenderParams(handle)
-    })
-    const unsubLights = subscribe(nodeStore.lights, () => {
+    // Subscribe at the root so nested light prop edits from the inspector are pushed.
+    const unsubNodeStore = subscribe(nodeStore, () => {
       pushRenderParams(handle)
     })
     const unsubGraph = subscribe(nodeGraphStore, () => {
@@ -51,8 +48,7 @@ export function useRenderOutputBridge(handle: SimulationHandle | null) {
     })
 
     return () => {
-      unsubRenderOutput()
-      unsubLights()
+      unsubNodeStore()
       unsubGraph()
     }
   }, [handle])

@@ -59,6 +59,7 @@ fn toroidalVelocity(
   let axisOffset = offset - liftDir * dot(offset, liftDir);
   let axisLen = length(axisOffset);
   let radialDir = select(vec3<f32>(0.0, 0.0, 1.0), axisOffset / axisLen, axisLen > 0.0001);
+  let tangentDir = normalize(cross(liftDir, radialDir) + vec3<f32>(0.0001));
 
   // Below the rising column: pull inward toward the axis (suction)
   let baseInward = smoothstep(0.0, -0.6, liftProgress) *                       // below source centre
@@ -68,7 +69,9 @@ fn toroidalVelocity(
   let capOutward = smoothstep(0.5, 1.2, liftProgress) *
                    smoothstep(1.6, 0.7, distanceRatio) *
                    (1.0 - smoothstep(0.0, 0.5, axisRatio));
-  let radialComponent = (-baseInward * 0.72 + capOutward * 1.85) * radialDir;
+  let ringRoll = capOutward * smoothstep(0.18, 0.8, axisRatio) * smoothstep(1.35, 0.55, distanceRatio);
+  let radialComponent = (-baseInward * 0.72 + capOutward * 1.72) * radialDir +
+    tangentDir * ringRoll * 0.22;
   // Missing axial leg of the circulation loop: hot smoke needs to be pulled
   // upward through the core column or the blast collapses into a thin cone.
   let columnUp = smoothstep(-0.1, 0.85, liftProgress) *
@@ -148,9 +151,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let blastExpansion = smoothstep(0.0, 0.78, blastAge);
     let plumeExpansion = smoothstep(0.0, 1.0, plumeAge);
     let rawExpansion = max(smokeExpansion * 0.48, max(blastExpansion, plumeExpansion * 0.92));
-    let expansion = clamp(pow(rawExpansion, mix(1.25, 0.8, clamp(expansionRate, 0.0, 2.0))), 0.0, 1.0);
-    let sustainedExpansion = plumeGate * (1.0 - plumeAge) * sustain * 0.08;
-    let effectiveRadius = radius * mix(0.2, 1.04 + expansionRate * 0.18, clamp(expansion + sustainedExpansion, 0.0, 1.2));
+    let expansion = clamp(pow(rawExpansion, mix(1.28, 0.74, clamp(expansionRate, 0.0, 3.0) / 3.0)), 0.0, 1.0);
+    let sustainedExpansion = plumeGate * (1.0 - plumeAge) * sustain * 0.12;
+    let effectiveRadius = radius * mix(0.16, 0.96 + expansionRate * 0.28, clamp(expansion + sustainedExpansion, 0.0, 1.25));
     let offset = normalized - blastSource.positionRadius.xyz;
     let distanceRatio = length(offset / vec3<f32>(1.0, 0.82, 1.0)) / max(effectiveRadius, 0.001);
     let pulse = sourcePulse(blastSource);
@@ -183,15 +186,22 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
       );
       let smokeMask = mix(0.82, 1.36, 1.0 - heatMask) * mix(0.84, 1.22, detailNoise);
       let flashPulse = blastGate * sin(blastAge * 3.14159265);
-      let hotFlash = core * flashPulse * heatMask;
+      let detonationSmokeSuppression = smoothstep(0.08, 0.45, smokeLeadTime);
+      let detonationCoreMask = mix(
+        smoothstep(0.98, 0.22, distanceRatio) * mix(0.72, 1.18, detailNoise),
+        1.0,
+        detonationSmokeSuppression,
+      );
+      let hotFlash = core * flashPulse * heatMask * detonationCoreMask;
       let shellRadius = mix(0.36, 1.02, blastExpansion);
       let shock = exp(-abs(distanceRatio - shellRadius) * 13.5) * flashPulse * mix(0.55, 1.15, detailNoise);
-      let smokeShell = smoothstep(0.18, 0.92, distanceRatio) *
-        (1.0 - smoothstep(1.08, 1.62, distanceRatio));
+      let smokeShell = smoothstep(0.08, 0.78, distanceRatio) *
+        (1.0 - smoothstep(1.0, 1.34, distanceRatio));
       let plumeSmokeShell = smoothstep(0.28, 0.86, distanceRatio) *
         (1.0 - smoothstep(1.0, 1.52, distanceRatio));
       let hotClear = smoothstep(0.12, 0.82, hotFlash + heatMask * flashPulse * 0.45);
-      let preSmoke = core * preSmokeGate * smokeShell * smokeMask * mix(0.12, 0.64, smokeExpansion);
+      let preSmoke = core * preSmokeGate * smokeShell * smokeMask * mix(0.12, 0.64, smokeExpansion) *
+        detonationSmokeSuppression;
       let direction = (offset + vec3<f32>(0.0, 0.12, 0.0)) / max(length(offset + vec3<f32>(0.0, 0.12, 0.0)), 0.0001);
       let plumeAxisOffset = offset - liftDirection * dot(offset, liftDirection);
       let axisRatio = length(plumeAxisOffset / vec3<f32>(1.0, 0.72, 1.0)) / max(effectiveRadius, 0.001);
@@ -208,7 +218,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
       let sootInCore = updraftCore * plumeSootMask *
         (blastGate * smoothstep(0.2, 0.82, blastAge) + plumeGate * exp(-plumeAge * 2.2));
       let coolingSmoke = core *
-        (blastGate * smoothstep(0.12, 0.78, blastAge) * smokeShell +
+        (blastGate * smoothstep(0.5, 0.96, blastAge) * smokeShell * detonationSmokeSuppression +
           plumeGate * (1.0 - plumeAge * 0.45) * plumeSmokeShell) *
         smokeMask *
         (1.0 - hotClear * 0.56);
@@ -220,7 +230,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         smoothstep(0.55, -0.45, liftProgress);
       let implosionPull = implosionGate * implosionBand * implosionStrength;
       let smokeDrag = max(coolingSmoke, sootInCore * 0.7) *
-        (0.14 + sustain * 0.14 + mushroomStrength * 0.18 + smokeEntrainment * 0.22);
+        (0.18 + sustain * 0.22 + mushroomStrength * 0.34 + smokeEntrainment * 0.36);
       let entrainedSmokeLift = max(coolingSmoke, sootInCore) *
         (smokeEntrainment * 0.55 + sustain * 0.12) *
         (flashPulse * 0.55 + plumeGate * (1.0 - plumeAge) * 0.92 + sustainLift * 0.85);
@@ -241,7 +251,8 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
       // Toroidal circulation that sculpts the mushroom: base smoke is sucked inward
       // and up, cap smoke spreads outward.  Scaled by liftImpulse so users control it.
       let toroid = toroidalVelocity(offset, liftDirection, radius, axisRatio, liftProgress, distanceRatio);
-      let toroidStrength = coreFireProgress * liftImpulse * (0.35 + mushroomStrength * 0.42) *
+      let toroidStrength = coreFireProgress * (abs(liftImpulse) * 0.5 + blastSource.shape.z * 0.32 + blastSource.impulse.x * 0.045) *
+        (0.28 + mushroomStrength * 0.68) *
         smoothstep(0.0, 0.15, distanceRatio);  // zero exactly at center to avoid instability
 
       // Pre-smoke is forcefully cleared from the hot interior and the rising column.
@@ -265,14 +276,14 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
       fuel = clamp01(fuel + (hotFlash * 0.78 + updraftCore * 0.12 + core * plumeGate * (1.0 - plumeAge) * plumeHeatMask * (0.16 + sustain * 0.04)) *
         blastSource.yields.z * params.deltaTime);
       reaction = clamp01(max(reaction, max(hotFlash, updraftCore * 0.34) * blastSource.yields.w));
-      velocity += direction * shock * blastSource.impulse.x * params.deltaTime;
+      velocity += direction * shock * blastSource.impulse.x * params.deltaTime * (0.96 + expansionRate * 0.1);
       velocity += curlKick * (radialPatch * blastSource.impulse.y + crumblePocket * blastSource.impulse.z) * params.deltaTime;
       velocity += curlKick * updraftCore * (1.0 - plumeHeatMask) * blastSource.impulse.z * params.deltaTime * 0.32;
-      velocity += direction * coolingSmoke * blastSource.impulse.x * params.deltaTime * 0.18;
+      velocity += direction * coolingSmoke * blastSource.impulse.x * params.deltaTime * (0.18 + expansionRate * 0.07);
       velocity += params.wind.xyz * coolingSmoke * params.wind.w * params.deltaTime * 0.9;
-      velocity += liftDirection * (core * liftImpulse * (flashPulse * 0.85 + plumeGate * (1.0 - plumeAge) * 1.08) +
-        updraftCore * blastSource.shape.z * 0.82 + coolingSmoke * liftImpulse * 0.28 + smokeDrag * liftImpulse * 0.52 +
-        entrainedSmokeLift * (liftImpulse * 0.42 + blastSource.impulse.x * 0.06 + blastSource.shape.z * 0.4)) * params.deltaTime;
+      velocity += liftDirection * (core * liftImpulse * (flashPulse * 0.86 + plumeGate * (1.0 - plumeAge) * 1.08) +
+        updraftCore * blastSource.shape.z * 1.28 + coolingSmoke * liftImpulse * 0.34 + smokeDrag * liftImpulse * 0.58 +
+        entrainedSmokeLift * (liftImpulse * 0.48 + blastSource.impulse.x * 0.07 + blastSource.shape.z * 0.62)) * params.deltaTime;
       velocity += -direction * implosionPull * params.deltaTime;
       // Toroidal mushroom circulation — this is what pulls the base smoke ring inward
       // and fans the cap outward.  Applied during and after the blast fires.
@@ -284,7 +295,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   temperatureField[index] = temperature;
   fuelField[index] = fuel;
   reactionField[index] = reaction;
-  velocityField[index] = vec4<f32>(clamp(velocity, vec3<f32>(-10.0), vec3<f32>(10.0)), 0.0);
+  velocityField[index] = vec4<f32>(clamp(velocity, vec3<f32>(-18.0), vec3<f32>(18.0)), 0.0);
 }
 `,
   ])
