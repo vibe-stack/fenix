@@ -27,4 +27,8 @@ export interface SimulationHandle {
   setVorticityStrength(v: number): void
   updateSources(sources: readonly ExplosionSource[]): void
   setRenderParams(params: { stepCount?: number; lights?: readonly RenderLight[]; scatteringForward?: number; scatteringBack?: number }): void
+  /** Advance simulation by deltaSeconds and render a frame at the given time, used for offline export. */
+  renderOffscreenFrame(elapsedSeconds: number, deltaSeconds: number): void
+  /** Returns the GPU canvas element used for rendering. */
+  getCanvas(): HTMLCanvasElement | null
 }

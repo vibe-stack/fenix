@@ -34,6 +34,7 @@ export interface ViewportBackgroundState {
   offsetX: number
   offsetY: number
   scale: number
+  color: string
 }
 
 export interface ViewportState {

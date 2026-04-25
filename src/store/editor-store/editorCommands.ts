@@ -36,6 +36,10 @@ export type EditorCommand =
       scale: number
     }
   | {
+      type: 'viewport/set-background-color'
+      color: string
+    }
+  | {
       type: 'simulation/set-profile'
       profile: SimulationProfile
     }

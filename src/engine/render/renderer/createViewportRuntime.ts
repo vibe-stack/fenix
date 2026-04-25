@@ -149,6 +149,27 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
       setVorticityStrength: (v) => simulation.setRuntimeParams({ vorticityStrength: v }),
       updateSources: (sources) => simulation.updateSources(sources),
       setRenderParams: (params) => this.raymarchPass?.setRenderParams(params),
+      getCanvas: () => this.canvas,
+      renderOffscreenFrame: (elapsedSeconds, deltaSeconds) => {
+        if (!this.gpu || !this.simulation || !this.raymarchPass || !this.controls || !this.canvas) {
+          return
+        }
+        const encoder = this.gpu.device.createCommandEncoder({ label: 'export-frame' })
+        const view = this.gpu.context.getCurrentTexture().createView()
+        const camera = this.controls.getSnapshot()
+        this.simulation.step(encoder, elapsedSeconds, deltaSeconds)
+        this.raymarchPass.render(
+          encoder,
+          view,
+          this.simulation.getRenderBuffers(),
+          camera,
+          this.displayMode,
+          this.canvas.width,
+          this.canvas.height,
+          elapsedSeconds,
+        )
+        this.gpu.device.queue.submit([encoder.finish()])
+      },
     }
   }
 

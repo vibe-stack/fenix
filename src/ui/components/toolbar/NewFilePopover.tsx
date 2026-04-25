@@ -41,46 +41,66 @@ export function NewFilePopover() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className={`flex h-8 items-center gap-1.5 px-3 text-[10px] uppercase tracking-[0.2em] transition-colors ${
+        className={`flex h-8 items-center gap-1.5 px-3 text-[10px] tracking-[0.12em] transition-colors ${
           open
             ? 'text-(--fenix-accent-soft)'
             : 'text-(--fenix-text-muted) hover:text-(--fenix-text)'
         }`}
       >
-        <span className={`h-1.5 w-1.5 ${open ? 'bg-(--fenix-accent)' : 'bg-(--fenix-border)'}`} />
-        New File
+        New file
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
 
-          <div className="absolute right-0 top-full z-50 mt-px w-104 border border-(--fenix-border) bg-(--fenix-panel) shadow-xl">
-            <div className="border-b border-(--fenix-border) px-3 py-2">
+          <div
+            className="absolute right-0 top-full z-50 mt-px w-96"
+            style={{
+              background: 'var(--fenix-panel)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}
+          >
+            <div className="px-3 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <span className="text-[9px] uppercase tracking-[0.28em] text-(--fenix-text-muted)">
                 Preset Gallery
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 px-3 py-3">
+            <div className="grid grid-cols-2 gap-1.5 p-2">
               {newFilePresets.map((preset) => (
                 <button
                   key={preset.id}
                   type="button"
                   onClick={() => applyPreset(preset.id)}
-                  className="group flex min-h-24 flex-col justify-between border border-(--fenix-border) bg-(--fenix-row) px-3 py-2 text-left transition-colors hover:border-(--fenix-accent) hover:bg-(--fenix-active)"
+                  className="group flex min-h-20 flex-col justify-between p-3 text-left transition-colors"
+                  style={{
+                    background: 'var(--fenix-row)',
+                    border: '1px solid rgba(255,255,255,0.04)',
+                  }}
+                  onMouseEnter={(e) => {
+                    const el = e.currentTarget
+                    el.style.background = 'var(--fenix-active)'
+                    el.style.borderColor = 'rgba(255,122,61,0.3)'
+                  }}
+                  onMouseLeave={(e) => {
+                    const el = e.currentTarget
+                    el.style.background = 'var(--fenix-row)'
+                    el.style.borderColor = 'rgba(255,255,255,0.04)'
+                  }}
                 >
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-(--fenix-text) group-hover:text-(--fenix-accent-soft)">
+                  <span className="text-[10px] tracking-[0.08em] text-(--fenix-text) group-hover:text-(--fenix-accent-soft)">
                     {preset.label}
                   </span>
-                  <span className="text-[10px] leading-4 text-(--fenix-text-muted)">
+                  <span className="mt-2 text-[10px] leading-4 text-(--fenix-text-muted)">
                     {preset.description}
                   </span>
                 </button>
               ))}
             </div>
 
-            <div className="border-t border-(--fenix-border) px-3 py-2 text-[10px] text-(--fenix-text-muted)">
+            <div className="px-3 py-2 text-[10px] text-(--fenix-text-muted)" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
               Replaces the current graph and resets the simulation volume.
             </div>
           </div>

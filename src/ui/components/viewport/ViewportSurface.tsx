@@ -55,7 +55,7 @@ export function ViewportSurface({
     : undefined
 
   return (
-    <div className="relative flex-1 overflow-hidden bg-zinc-600/20">
+    <div className="relative flex-1 overflow-hidden" style={{ backgroundColor: background.color }}>
       {backgroundStyle && (
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute inset-0" style={backgroundStyle} />

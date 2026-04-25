@@ -125,6 +125,19 @@ function reduceEditorSnapshot(
       }
     }
 
+    case 'viewport/set-background-color': {
+      return {
+        ...snapshot,
+        viewportState: {
+          ...snapshot.viewportState,
+          background: {
+            ...snapshot.viewportState.background,
+            color: command.color,
+          },
+        },
+      }
+    }
+
     case 'simulation/set-profile': {
       return {
         ...snapshot,

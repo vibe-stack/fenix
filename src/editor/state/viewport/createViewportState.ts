@@ -11,6 +11,7 @@ export function createViewportState(): ViewportState {
       offsetX: 0,
       offsetY: 0,
       scale: 1,
+      color: '#0d0a09',
     },
   }
 }
