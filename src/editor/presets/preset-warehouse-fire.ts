@@ -62,6 +62,7 @@ export const warehouseFirePreset: NewFilePreset = {
       speed: 7.2,
       directionX: 0.3, directionY: 1, directionZ: -0.08,
       falloff: 0.88,
+      tightness: 0.18,
       seed: 1367,
     }),
     createVelocityEmitter('Interior Churn', {
@@ -73,6 +74,7 @@ export const warehouseFirePreset: NewFilePreset = {
       speed: 3.2,
       directionX: 0, directionY: 1, directionZ: 0,
       falloff: 0.95,
+      tightness: 0.08,
       seed: 1373,
     }),
     createIgniterEmitter('Initial Flame', {
@@ -107,7 +109,11 @@ export const warehouseFirePreset: NewFilePreset = {
     gravity: [0, -1, 0],
     gravityStrength: 0.45,
     buoyancy: 3.2,
-    vorticityStrength: 3.4,
+    vorticityStrength: 4.8,
+    vorticityConstantMask: 0.65,
+    vorticityVelocityMask: 0.55,
+    vorticityHeatMask: 1.0,
+    vorticityDensityMask: 0.8,
     worldSize: 26,
   },
   renderOutput: {

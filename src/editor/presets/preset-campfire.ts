@@ -38,6 +38,7 @@ export const campfirePreset: NewFilePreset = {
       speed: 5.5,
       directionX: 0.04, directionY: 1, directionZ: -0.03,
       falloff: 0.85,
+      tightness: 0.18,
       seed: 617,
     }),
     createVelocityEmitter('Flame Flicker', {
@@ -49,6 +50,7 @@ export const campfirePreset: NewFilePreset = {
       speed: 2.8,
       directionX: 0, directionY: 1, directionZ: 0,
       falloff: 0.75,
+      tightness: 0.06,
       seed: 618,
     }),
     createIgniterEmitter('Ignition', {
@@ -75,7 +77,11 @@ export const campfirePreset: NewFilePreset = {
     gravity: [0, -1, 0],
     gravityStrength: 0.45,
     buoyancy: 2.35,
-    vorticityStrength: 1.35,
+    vorticityStrength: 2.2,
+    vorticityConstantMask: 0.55,
+    vorticityVelocityMask: 0.35,
+    vorticityHeatMask: 1.15,
+    vorticityDensityMask: 0.35,
     worldSize: 5,
   },
   renderOutput: {

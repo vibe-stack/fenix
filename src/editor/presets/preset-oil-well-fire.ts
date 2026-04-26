@@ -26,6 +26,7 @@ export const oilWellFirePreset: NewFilePreset = {
       speed: 18,
       directionX: 0.04, directionY: 1, directionZ: -0.02,
       falloff: 0.65,
+      tightness: 0.28,
       seed: 819,
     }),
     createScalarEmitter('Early Black Soot', {
@@ -61,6 +62,7 @@ export const oilWellFirePreset: NewFilePreset = {
       speed: 7.5,
       directionX: 0.8, directionY: 0.45, directionZ: -0.35,
       falloff: 0.85,
+      tightness: 0.12,
       seed: 847,
     }),
     createIgniterEmitter('Ignition', {
@@ -87,7 +89,11 @@ export const oilWellFirePreset: NewFilePreset = {
     gravity: [0, -1, 0],
     gravityStrength: 0.45,
     buoyancy: 4.4,
-    vorticityStrength: 3.1,
+    vorticityStrength: 5.2,
+    vorticityConstantMask: 0.65,
+    vorticityVelocityMask: 0.7,
+    vorticityHeatMask: 1.15,
+    vorticityDensityMask: 0.7,
     worldSize: 30,
   },
   renderOutput: {

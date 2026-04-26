@@ -26,6 +26,7 @@ export const gasLineRupturePreset: NewFilePreset = {
       speed: 20,
       directionX: 1, directionY: 0.22, directionZ: -0.08,
       falloff: 0.68,
+      tightness: 0.38,
       seed: 1523,
     }),
     createScalarEmitter('Lifted Soot Trail', {
@@ -49,6 +50,7 @@ export const gasLineRupturePreset: NewFilePreset = {
       speed: 4.0,
       directionX: 0, directionY: 1, directionZ: 0,
       falloff: 0.95,
+      tightness: 0.08,
       seed: 1543,
     }),
     createIgniterEmitter('Flash Ignition', {
@@ -75,7 +77,11 @@ export const gasLineRupturePreset: NewFilePreset = {
     gravity: [0, -1, 0],
     gravityStrength: 0.45,
     buoyancy: 3.8,
-    vorticityStrength: 3.6,
+    vorticityStrength: 5.0,
+    vorticityConstantMask: 0.6,
+    vorticityVelocityMask: 0.85,
+    vorticityHeatMask: 1.1,
+    vorticityDensityMask: 0.55,
     worldSize: 30,
   },
   renderOutput: {

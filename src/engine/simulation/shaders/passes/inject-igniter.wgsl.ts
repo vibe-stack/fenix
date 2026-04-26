@@ -49,9 +49,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
     let dist   = length(pos - src.positionRadius.xyz);
     let radius = src.positionRadius.w;
-    if (dist > sourceOuterLimit(radius)) { continue; }
+    if (dist > select(radius, sourceOuterLimit(radius), isBurstSource(src))) { continue; }
 
-    let weight    = eruptiveSourceFalloff(pos, dist, src, 0.6);
+    let weight    = select(sphereFalloff(dist, radius, 0.6), eruptiveSourceFalloff(pos, dist, src, 0.6), isBurstSource(src));
     let intensity = src.noise.z;  // packed into noise.z slot
 
     let fuelAvailability = select(smoothstep(0.02, 0.22, fuelField[index]), 1.0, isBurstSource(src));
