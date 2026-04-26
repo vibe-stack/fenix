@@ -271,8 +271,9 @@ function blitShader() {
     @group(0) @binding(1) var smp: sampler;
 
     @fragment fn fsMain(v: VO) -> @location(0) vec4<f32> {
-      let hdr = max(textureSample(src, smp, v.uv).rgb, vec3(0.0));
-      return vec4(pow(hdr, vec3(0.92)), 1.0);
+      let base = textureSample(src, smp, v.uv);
+      let hdr = max(base.rgb, vec3(0.0));
+      return vec4(pow(hdr, vec3(0.92)), clamp(base.a, 0.0, 1.0));
     }
   `
 }
@@ -290,7 +291,9 @@ function compositeShader() {
       let base = textureSample(src, smp, v.uv);
       let glow = textureSample(bloomTex, smp, v.uv);
       let hdr = max(base.rgb + max(glow.rgb, vec3(0.0)) * bloom.strength, vec3(0.0));
-      return vec4(pow(hdr, vec3(0.92)), 1.0);
+      let glowAlpha = clamp(glow.a * bloom.strength, 0.0, 1.0);
+      let alpha = clamp(base.a + glowAlpha * (1.0 - base.a), 0.0, 1.0);
+      return vec4(pow(hdr, vec3(0.92)), alpha);
     }
   `
 }
