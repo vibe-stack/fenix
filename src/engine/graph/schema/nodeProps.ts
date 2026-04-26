@@ -131,6 +131,10 @@ export interface RenderOutputNodeProps {
   stepCount: number
   scatteringForward: number
   scatteringBack: number
+  bloomEnabled: boolean
+  bloomThreshold: number
+  bloomStrength: number
+  bloomRadius: number
 }
 
 export type NodePropsMap = {

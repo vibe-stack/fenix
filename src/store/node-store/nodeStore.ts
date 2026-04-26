@@ -172,6 +172,10 @@ export const nodeStore = proxy<NodeStoreState>({
     stepCount: 400,
     scatteringForward: 0.32,
     scatteringBack: -0.18,
+    bloomEnabled: true,
+    bloomThreshold: 0.6,
+    bloomStrength: 0.9,
+    bloomRadius: 0.4,
     ...defaultPreset.renderOutput,
   },
 })
