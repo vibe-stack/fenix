@@ -720,8 +720,7 @@ function createVolumeRaymarchShader() {
         discard;
       }
 
-      let finalColor = pow(accumulatedColor, vec3<f32>(0.92));
-      return vec4<f32>(finalColor, accumulatedAlpha);
+      return vec4<f32>(accumulatedColor, accumulatedAlpha);
     }
   `
 }

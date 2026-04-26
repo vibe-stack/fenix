@@ -6,6 +6,7 @@ import { Panel } from '../../panels/Panel'
 import { SliderRow } from '../../common/SliderRow'
 import { SectionDivider } from '../../common/SectionDivider'
 import { StatRow } from '../../common/StatRow'
+import { ToggleRow } from '../../common/ToggleRow'
 
 const DISPLAY_MODES = ['temperature', 'density', 'fuel'] as const
 
@@ -49,6 +50,12 @@ export function RenderOutputNodeInspector() {
       <SectionDivider label="Scattering" />
       <SliderRow label="Forward g" value={props.scatteringForward} min={0} max={0.95} step={0.01} onChange={(v) => set('scatteringForward', v)} />
       <SliderRow label="Back g" value={props.scatteringBack} min={-0.95} max={0} step={0.01} onChange={(v) => set('scatteringBack', v)} />
+
+      <SectionDivider label="Bloom" />
+      <ToggleRow label="Enabled" value={props.bloomEnabled} onChange={(v) => set('bloomEnabled', v)} />
+      <SliderRow label="Threshold" value={props.bloomThreshold} min={0} max={1} step={0.01} onChange={(v) => set('bloomThreshold', v)} />
+      <SliderRow label="Strength" value={props.bloomStrength} min={0} max={3} step={0.05} onChange={(v) => set('bloomStrength', v)} />
+      <SliderRow label="Radius" value={props.bloomRadius} min={0} max={1} step={0.01} onChange={(v) => set('bloomRadius', v)} />
     </Panel>
   )
 }

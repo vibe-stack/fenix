@@ -29,6 +29,10 @@ function pushRenderParams(handle: SimulationHandle) {
     lights: collectConnectedLights(),
     scatteringForward: ro.scatteringForward,
     scatteringBack: ro.scatteringBack,
+    bloomEnabled: ro.bloomEnabled,
+    bloomThreshold: ro.bloomThreshold,
+    bloomStrength: ro.bloomStrength,
+    bloomRadius: ro.bloomRadius,
   })
 }
 

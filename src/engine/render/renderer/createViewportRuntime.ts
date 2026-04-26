@@ -5,6 +5,7 @@ import { createCombustionVolumeSimulation, type CombustionVolumeSimulation } fro
 import type { VolumeResolution } from '../../simulation/common/volumeResolution'
 import { createVolumeRaymarchPass, type VolumeRaymarchPass } from '../passes/createVolumeRaymarchPass'
 import { createViewportOverlayPass, type ViewportOverlayPass } from '../passes/createViewportOverlayPass'
+import { createBloomPass, type BloomPass, type BloomParams } from '../passes/createBloomPass'
 import type { VolumeDisplayMode } from '../volumetrics/volumeDisplayMode'
 import type { SimulationHandle } from '../../core/types/platform'
 
@@ -38,6 +39,9 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
   private simulation: CombustionVolumeSimulation | null = null
   private raymarchPass: VolumeRaymarchPass | null = null
   private overlayPass: ViewportOverlayPass | null = null
+  private bloomPass: BloomPass | null = null
+  private bloomParams: BloomParams = { enabled: true, threshold: 0.6, strength: 0.9, radius: 0.4 }
+  private hdrTexture: GPUTexture | null = null
   private resizeObserver: ResizeObserver | null = null
   private animationFrameId: number | null = null
   private lastFrameTime = 0
@@ -74,8 +78,9 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
       gravity: [0, -1, 0],
       gravityStrength: 0.45,
     })
-    const raymarchPass = createVolumeRaymarchPass(gpu.device, gpu.format, simulation.resolution)
+    const raymarchPass = createVolumeRaymarchPass(gpu.device, 'rgba16float', simulation.resolution)
     const overlayPass = createViewportOverlayPass(gpu.device, gpu.format, simulation.resolution)
+    const bloomPass = createBloomPass(gpu.device, gpu.format)
 
     controls.attach(canvas)
 
@@ -85,6 +90,7 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     this.simulation = simulation
     this.raymarchPass = raymarchPass
     this.overlayPass = overlayPass
+    this.bloomPass = bloomPass
     this.paused = true
     this.simulationHandle = this.buildHandle(simulation)
 
@@ -134,6 +140,10 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     this.raymarchPass = null
     this.overlayPass?.dispose()
     this.overlayPass = null
+    this.bloomPass?.dispose()
+    this.bloomPass = null
+    this.hdrTexture?.destroy()
+    this.hdrTexture = null
     this.simulation?.dispose()
     this.simulation = null
     this.simulationHandle = null
@@ -184,34 +194,40 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
       setWorldSize: (v) => simulation.setRuntimeParams({ worldSize: v }),
       setSimulationQuality: (settings) => simulation.setQualitySettings(settings),
       updateSources: (sources) => simulation.updateSources(sources),
-      setRenderParams: (params) => this.raymarchPass?.setRenderParams(params),
+      setRenderParams: (params) => {
+        this.raymarchPass?.setRenderParams(params)
+        if (params.bloomEnabled !== undefined) this.bloomParams.enabled = params.bloomEnabled
+        if (params.bloomThreshold !== undefined) this.bloomParams.threshold = params.bloomThreshold
+        if (params.bloomStrength !== undefined) this.bloomParams.strength = params.bloomStrength
+        if (params.bloomRadius !== undefined) this.bloomParams.radius = params.bloomRadius
+      },
       getCanvas: () => this.canvas,
       renderOffscreenFrame: (elapsedSeconds, deltaSeconds) => {
-        if (!this.gpu || !this.simulation || !this.raymarchPass || !this.overlayPass || !this.controls || !this.canvas) {
+        if (!this.gpu || !this.simulation || !this.raymarchPass || !this.overlayPass || !this.bloomPass || !this.controls || !this.canvas) {
           return
         }
+        const w = this.canvas.width
+        const h = this.canvas.height
+        if (!this.hdrTexture || this.hdrTexture.width !== w || this.hdrTexture.height !== h) {
+          this.rebuildHdrTexture(w, h)
+        }
         const encoder = this.gpu.device.createCommandEncoder({ label: 'export-frame' })
-        const view = this.gpu.context.getCurrentTexture().createView()
+        const canvasView = this.gpu.context.getCurrentTexture().createView()
+        const hdrView = this.hdrTexture!.createView()
         const camera = this.controls.getSnapshot()
         this.simulation.step(encoder, elapsedSeconds, deltaSeconds)
         this.raymarchPass.render(
           encoder,
-          view,
+          hdrView,
           this.simulation.getRenderBuffers(),
           camera,
           this.displayMode,
-          this.canvas.width,
-          this.canvas.height,
+          w,
+          h,
           elapsedSeconds,
         )
-        this.overlayPass.render(
-          encoder,
-          view,
-          camera,
-          this.canvas.width,
-          this.canvas.height,
-          this.viewportOverlays,
-        )
+        this.bloomPass.render(encoder, hdrView, canvasView, w, h, this.bloomParams)
+        this.overlayPass.render(encoder, canvasView, camera, w, h, this.viewportOverlays)
         this.gpu.device.queue.submit([encoder.finish()])
       },
     }
@@ -275,19 +291,40 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
     this.canvas.width = width
     this.canvas.height = height
     this.controls.setAspect(width / height)
+    this.rebuildHdrTexture(width, height)
+  }
+
+  private rebuildHdrTexture(width: number, height: number) {
+    if (!this.gpu) return
+    this.hdrTexture?.destroy()
+    this.hdrTexture = this.gpu.device.createTexture({
+      label: 'hdr-raymarch-target',
+      size: { width, height },
+      format: 'rgba16float',
+      // RENDER_ATTACHMENT | TEXTURE_BINDING
+      usage: 0x10 | 0x04,
+    })
   }
 
   private readonly renderFrame = (time: number) => {
     this.animationFrameId = null
 
-    if (!this.gpu || !this.simulation || !this.raymarchPass || !this.overlayPass || !this.controls) {
+    if (!this.gpu || !this.simulation || !this.raymarchPass || !this.overlayPass || !this.bloomPass || !this.controls) {
       return
+    }
+
+    const w = this.canvas?.width ?? 1
+    const h = this.canvas?.height ?? 1
+
+    if (!this.hdrTexture || this.hdrTexture.width !== w || this.hdrTexture.height !== h) {
+      this.rebuildHdrTexture(w, h)
     }
 
     const elapsedSeconds = time * 0.001
     const deltaSeconds = Math.max(1 / 240, Math.min((time - this.lastFrameTime) * 0.001, 1 / 20))
     const encoder = this.gpu.device.createCommandEncoder({ label: 'raw-webgpu-volume-frame' })
-    const view = this.gpu.context.getCurrentTexture().createView()
+    const canvasView = this.gpu.context.getCurrentTexture().createView()
+    const hdrView = this.hdrTexture!.createView()
     const camera = this.controls.getSnapshot()
     const stats = this.stats
 
@@ -297,30 +334,28 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
       this.lastFrameTime = time
     }
 
+    // Raymarch into HDR offscreen texture
     this.raymarchPass.render(
       encoder,
-      view,
+      hdrView,
       this.simulation.getRenderBuffers(),
       camera,
       this.displayMode,
-      this.canvas?.width ?? 1,
-      this.canvas?.height ?? 1,
+      w, h,
       elapsedSeconds,
       stats?.getTimestampWrites(),
     )
-    this.overlayPass.render(
-      encoder,
-      view,
-      camera,
-      this.canvas?.width ?? 1,
-      this.canvas?.height ?? 1,
-      this.viewportOverlays,
-    )
+
+    // Bloom: threshold → blur → composite HDR onto canvas
+    this.bloomPass.render(encoder, hdrView, canvasView, w, h, this.bloomParams)
+
+    // Overlay on top of canvas
+    this.overlayPass.render(encoder, canvasView, camera, w, h, this.viewportOverlays)
+
     stats?.end(encoder)
     this.gpu.device.queue.submit([encoder.finish()])
     stats?.update()
 
-    // Only schedule the next frame when playing — paused draws one frame then stops
     if (!this.paused) {
       this.scheduleFrame()
     }
