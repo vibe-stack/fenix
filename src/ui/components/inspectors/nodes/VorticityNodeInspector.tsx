@@ -17,6 +17,11 @@ export function VorticityNodeInspector() {
     <Panel title="Vorticity">
       <SectionDivider label="Confinement" />
       <SliderRow label="Strength" value={props.strength} min={0} max={32} step={0.05} onChange={(v) => set('strength', v)} />
+      <SectionDivider label="Masks" />
+      <SliderRow label="Constant" value={props.constantMask ?? 1} min={0} max={2} step={0.01} onChange={(v) => set('constantMask', v)} />
+      <SliderRow label="Velocity" value={props.velocityMask ?? 0.4} min={0} max={2} step={0.01} onChange={(v) => set('velocityMask', v)} />
+      <SliderRow label="Heat" value={props.heatMask ?? 0.8} min={0} max={2} step={0.01} onChange={(v) => set('heatMask', v)} />
+      <SliderRow label="Density" value={props.densityMask ?? 0.35} min={0} max={2} step={0.01} onChange={(v) => set('densityMask', v)} />
     </Panel>
   )
 }

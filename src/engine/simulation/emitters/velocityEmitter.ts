@@ -15,5 +15,7 @@ export interface VelocityEmitter {
   direction: readonly [number, number, number]
   /** Falloff sharpness: 0 = flat top hat, 1 = gaussian. */
   falloff: number
+  /** 0 = add to the existing field, 1 = locally replace it. */
+  tightness?: number
   seed: number
 }

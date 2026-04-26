@@ -12,7 +12,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { nodeStore } from '../../../store/node-store/nodeStore'
-import { addScalarEmitter, addVelocityEmitter, addIgniterEmitter, addLight, removeEmitter, removeLight } from '../../../store/node-store/nodeStore'
+import { addScalarEmitter, addVelocityEmitter, addBurstEmitter, addIgniterEmitter, addLight, removeEmitter, removeLight } from '../../../store/node-store/nodeStore'
 import { addEdge, removeEdges, removeNodeFromGraph, setNodePosition } from '../../../store/node-store/nodeGraphStore'
 import { graphNodeTypes } from './nodes/nodeTypes'
 import { useGraphNodes } from './useGraphNodes'
@@ -102,6 +102,14 @@ export function NodeGraphEditor() {
           sublabel: 'Injects radial, directional or turbulent velocity',
           action: () => {
             const id = addVelocityEmitter(`Velocity ${Date.now().toString(36).slice(-4)}`)
+            setNodePosition(id, { x: contextMenu.flowX, y: contextMenu.flowY })
+          },
+        },
+        {
+          label: 'Burst Source',
+          sublabel: 'One-shot scalar, reaction and pressure impulse',
+          action: () => {
+            const id = addBurstEmitter(`Burst ${Date.now().toString(36).slice(-4)}`)
             setNodePosition(id, { x: contextMenu.flowX, y: contextMenu.flowY })
           },
         },

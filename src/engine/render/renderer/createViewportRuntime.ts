@@ -175,6 +175,12 @@ class RawWebGPUViewportRuntime implements ViewportRuntime {
       setGravityStrength: (v) => simulation.setRuntimeParams({ gravityStrength: v }),
       setBuoyancy: (v) => simulation.setRuntimeParams({ buoyancy: v }),
       setVorticityStrength: (v) => simulation.setRuntimeParams({ vorticityStrength: v }),
+      setVorticityMask: (constant, velocity, heat, density) => simulation.setRuntimeParams({
+        vorticityConstantMask: constant,
+        vorticityVelocityMask: velocity,
+        vorticityHeatMask: heat,
+        vorticityDensityMask: density,
+      }),
       setWorldSize: (v) => simulation.setRuntimeParams({ worldSize: v }),
       setSimulationQuality: (settings) => simulation.setQualitySettings(settings),
       updateSources: (sources) => simulation.updateSources(sources),

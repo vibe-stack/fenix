@@ -29,6 +29,7 @@ export class BuoyancyPass {
         volumeInfo,
         field.density,
         field.temperature,
+        field.reaction,
         velocity,
         activeBrickFlags[index],
         activeBrickInfo,

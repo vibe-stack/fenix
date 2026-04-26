@@ -18,6 +18,12 @@ export function useSimulationBridge(
     handle.setGravityStrength(params.gravityStrength)
     handle.setBuoyancy(params.buoyancy)
     handle.setVorticityStrength(params.vorticityStrength)
+    handle.setVorticityMask(
+      params.vorticityConstantMask ?? 1,
+      params.vorticityVelocityMask ?? 0.4,
+      params.vorticityHeatMask ?? 0.8,
+      params.vorticityDensityMask ?? 0.35,
+    )
     handle.setWorldSize(params.worldSize)
     handle.setSimulationQuality(qualitySettings)
   }, [
@@ -28,6 +34,10 @@ export function useSimulationBridge(
     params.gravityStrength,
     params.buoyancy,
     params.vorticityStrength,
+    params.vorticityConstantMask,
+    params.vorticityVelocityMask,
+    params.vorticityHeatMask,
+    params.vorticityDensityMask,
     params.worldSize,
     qualitySettings,
   ])

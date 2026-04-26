@@ -29,6 +29,10 @@ export function createVelocityEmitter(label: string, props: import('../../engine
   return { label, props: { kind: 'velocity', ...props } }
 }
 
+export function createBurstEmitter(label: string, props: import('../../engine/graph/schema/nodeProps').BurstEmitterNodeProps): PresetEmitter {
+  return { label, props: { kind: 'burst', ...props } }
+}
+
 export function createIgniterEmitter(label: string, props: import('../../engine/graph/schema/nodeProps').IgniterEmitterNodeProps): PresetEmitter {
   return { label, props: { kind: 'igniter', ...props } }
 }

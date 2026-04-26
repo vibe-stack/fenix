@@ -50,6 +50,10 @@ export interface SimulationRuntimeParams {
   gravityStrength: number
   buoyancy: number
   vorticityStrength: number
+  vorticityConstantMask?: number
+  vorticityVelocityMask?: number
+  vorticityHeatMask?: number
+  vorticityDensityMask?: number
   worldSize: number
 }
 

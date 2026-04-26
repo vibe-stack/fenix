@@ -9,7 +9,7 @@ export interface SimulationDefaults {
 }
 
 export const simulationDefaults: SimulationDefaults = {
-  domainResolution: [90, 164, 90],
+  domainResolution: [160, 160, 160],
   sparseBrickSize: 128,
   solver: 'mac-cormack',
   stepRateHz: 120,

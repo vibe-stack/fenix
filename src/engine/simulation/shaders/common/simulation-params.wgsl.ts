@@ -10,5 +10,6 @@ struct SimulationParams {
   vorticityStrength: f32, // vorticity confinement scale
   dx: f32,                // meters per voxel (worldSize / max(width, depth))
   worldSize: f32,         // physical domain size in meters
+  vorticityMask: vec4<f32>, // x=constant, y=velocity/curl, z=heat/reaction, w=density
 }
 `

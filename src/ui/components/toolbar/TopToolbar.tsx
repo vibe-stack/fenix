@@ -4,8 +4,8 @@ import type { ViewportShadingMode } from '../../../editor/models/workspace'
 import { useEditorDispatch, useEditorStore } from '../../hooks/useEditorStore'
 import { BackgroundPopover } from './BackgroundPopover'
 import { ExportPopover } from './ExportPopover'
-import { GraphFilePopover } from './GraphFilePopover'
-import { NewFilePopover } from './NewFilePopover'
+import { NewFileButton, OpenGraphButton, SaveGraphButton } from './GraphFilePopover'
+import { PresetsPopover } from './PresetsPopover'
 
 interface TopToolbarProps {
   diagnostics: RendererDiagnostics
@@ -13,28 +13,48 @@ interface TopToolbarProps {
 
 const shadingModes: ViewportShadingMode[] = ['density', 'temperature', 'fuel']
 
-export function TopToolbar({ diagnostics }: TopToolbarProps) {
+const shadingDot: Record<ViewportShadingMode, string> = {
+  density: 'bg-blue-400',
+  temperature: 'bg-(--fenix-accent)',
+  fuel: 'bg-amber-400',
+}
+
+export function TopToolbar({ diagnostics: _diagnostics }: TopToolbarProps) {
   const dispatch = useEditorDispatch()
   const viewportState = useEditorStore((snapshot) => snapshot.viewportState)
   const [shadingOpen, setShadingOpen] = useState(false)
 
   return (
     <header className="flex h-8 shrink-0 items-center gap-px bg-(--fenix-topbar)">
-      {/* App identity */}
+
+      {/* ── App identity ── */}
       <div className="flex items-center px-4">
         <span className="text-[10px] font-bold uppercase tracking-[0.36em] text-(--fenix-accent)">
           Fenix
         </span>
       </div>
 
+      <Sep />
+
+      {/* ── Presets gallery ── */}
+      <PresetsPopover />
+
+      <Sep />
+
+      {/* ── File ops ── */}
+      <NewFileButton />
+      <OpenGraphButton />
+      <SaveGraphButton />
+
+      {/* ── Push export to the right ── */}
       <div className="flex-1" />
 
-      {/* Export — centered */}
-      <ExportPopover />
+      {/* ── Viewport controls ── */}
+      <BackgroundPopover />
 
-      <div className="flex-1" />
+      <Sep />
 
-      {/* Shading mode popover */}
+      {/* ── Display / shading mode ── */}
       <div className="relative">
         <button
           type="button"
@@ -45,16 +65,8 @@ export function TopToolbar({ diagnostics }: TopToolbarProps) {
               : 'text-(--fenix-text-muted) hover:text-(--fenix-text)'
           }`}
         >
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              viewportState.shadingMode === 'density'
-                ? 'bg-blue-400'
-                : viewportState.shadingMode === 'temperature'
-                  ? 'bg-(--fenix-accent)'
-                  : 'bg-amber-400'
-            }`}
-          />
-          {viewportState.shadingMode}
+          <span className={`h-1.5 w-1.5 rounded-full ${shadingDot[viewportState.shadingMode]}`} />
+          Display
           <ChevronIcon />
         </button>
 
@@ -89,16 +101,8 @@ export function TopToolbar({ diagnostics }: TopToolbarProps) {
                         background: isActive ? 'var(--fenix-active)' : 'transparent',
                       }}
                     >
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          mode === 'density'
-                            ? 'bg-blue-400'
-                            : mode === 'temperature'
-                              ? 'bg-(--fenix-accent)'
-                              : 'bg-amber-400'
-                        }`}
-                      />
-                      {mode}
+                      <span className={`h-1.5 w-1.5 rounded-full ${shadingDot[mode]}`} />
+                      {mode.charAt(0).toUpperCase() + mode.slice(1)}
                     </button>
                   )
                 })}
@@ -108,33 +112,17 @@ export function TopToolbar({ diagnostics }: TopToolbarProps) {
         )}
       </div>
 
-      <div className="h-4 w-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+      <Sep />
 
-      <NewFilePopover />
+      {/* ── Export ── */}
+      <ExportPopover />
 
-      <div className="h-4 w-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-
-      <GraphFilePopover />
-
-      <div className="h-4 w-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-
-      <BackgroundPopover />
-
-      <div className="h-4 w-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-
-      {/* GPU state */}
-      <div className="flex items-center gap-2 px-4">
-        <span
-          className={`h-1.5 w-1.5 rounded-full ${
-            diagnostics.supportState === 'ready' ? 'bg-(--fenix-success)' : 'bg-(--fenix-warning)'
-          }`}
-        />
-        <span className="text-[10px] tracking-widest text-(--fenix-text-muted)">
-          {diagnostics.supportState === 'ready' ? diagnostics.adapterName : 'no gpu adapter'}
-        </span>
-      </div>
     </header>
   )
+}
+
+function Sep() {
+  return <div className="h-4 w-px mx-0.5" style={{ background: 'rgba(255,255,255,0.06)' }} />
 }
 
 function ChevronIcon() {

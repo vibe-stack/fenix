@@ -16,14 +16,84 @@ struct EmitterSource {
 
 /** Returns 0 outside the active window, 1 inside. */
 export const EmitterEnvelopeWGSL = /* wgsl */ `
+const SOURCE_KIND_SCALAR: f32 = 0.0;
+const SOURCE_KIND_VELOCITY: f32 = 1.0;
+const SOURCE_KIND_IGNITER: f32 = 2.0;
+const SOURCE_KIND_BURST: f32 = 3.0;
+
 fn activeGate(src: EmitterSource) -> f32 {
   let age = params.time - src.timing.x;
   return step(0.0, age) * step(age, src.timing.y);
 }
 
+fn isScalarSource(src: EmitterSource) -> bool {
+  return src._meta.x == SOURCE_KIND_SCALAR;
+}
+
+fn isVelocitySource(src: EmitterSource) -> bool {
+  return src._meta.x == SOURCE_KIND_VELOCITY;
+}
+
+fn isIgniterSource(src: EmitterSource) -> bool {
+  return src._meta.x == SOURCE_KIND_IGNITER;
+}
+
+fn isBurstSource(src: EmitterSource) -> bool {
+  return src._meta.x == SOURCE_KIND_BURST;
+}
+
+fn isScalarInjectSource(src: EmitterSource) -> bool {
+  return isScalarSource(src) || isBurstSource(src);
+}
+
+fn isVelocityInjectSource(src: EmitterSource) -> bool {
+  return isVelocitySource(src) || isBurstSource(src);
+}
+
+fn isReactionInjectSource(src: EmitterSource) -> bool {
+  return isIgniterSource(src) || isBurstSource(src);
+}
+
+fn sourceAge(src: EmitterSource) -> f32 {
+  return max(params.time - src.timing.x, 0.0);
+}
+
+fn sourceDuration(src: EmitterSource) -> f32 {
+  return max(src.timing.y, 0.0001);
+}
+
 fn sphereFalloff(dist: f32, radius: f32, falloff: f32) -> f32 {
   let t = clamp(1.0 - dist / max(radius, 0.0001), 0.0, 1.0);
   return mix(step(0.0, t - 0.0001), t * t, falloff);
+}
+
+fn sourceFeather(targetRadius: f32) -> f32 {
+  let voxelWidth = params.dx / max(params.worldSize, 0.0001);
+  return max(targetRadius * 0.24, voxelWidth * 3.0);
+}
+
+fn sourceOuterLimit(targetRadius: f32) -> f32 {
+  return targetRadius + sourceFeather(targetRadius);
+}
+
+fn eruptiveSourceFalloff(pos: vec3<f32>, dist: f32, src: EmitterSource, falloff: f32) -> f32 {
+  let targetRadius = src.positionRadius.w;
+  let growthSeconds = clamp(targetRadius * 5.5, 0.1, 0.75);
+  let age = sourceAge(src);
+  let growth = smoothstep(0.0, 1.0, clamp(age / growthSeconds, 0.0, 1.0));
+  let feather = sourceFeather(targetRadius);
+
+  let seed = src._meta.y;
+  let coarse = emitterNoise(pos + vec3<f32>(age * 0.17, -age * 0.11, age * 0.07), 6.0, seed);
+  let fine = emitterNoise(pos + vec3<f32>(-age * 0.33, age * 0.21, -age * 0.15), 18.0, seed + 41.0);
+  let lobe = clamp(coarse * 0.72 + fine * 0.28, 0.0, 1.0);
+  let reach = targetRadius * growth * mix(0.62, 1.0, smoothstep(0.2, 0.92, lobe));
+  let front = 1.0 - smoothstep(reach - feather, reach + feather, dist);
+  let coreRadius = max(targetRadius * (0.18 + growth * 0.38), feather);
+  let core = sphereFalloff(dist, coreRadius, falloff) * (1.0 - growth * 0.35);
+  let body = sphereFalloff(dist, max(reach + feather, feather), falloff) * front;
+
+  return clamp(max(core, body) * mix(0.72, 1.2, lobe), 0.0, 1.0);
 }
 `
 

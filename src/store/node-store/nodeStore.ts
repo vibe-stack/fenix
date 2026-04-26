@@ -6,6 +6,7 @@ import {
 } from '../../editor/presets/newFilePresets'
 import type {
   EmitterNodeProps,
+  BurstEmitterNodeProps,
   ScalarEmitterNodeProps,
   VelocityEmitterNodeProps,
   IgniterEmitterNodeProps,
@@ -72,6 +73,27 @@ export function emitterPropsToSource(props: EmitterNodeProps): EmitterSource {
       speed: props.speed,
       direction: [props.directionX, props.directionY, props.directionZ],
       falloff: props.falloff,
+      tightness: props.tightness ?? 0,
+      seed: props.seed,
+    }
+  }
+  if (props.kind === 'burst') {
+    return {
+      kind: 'burst',
+      position: [props.positionX, props.positionY, props.positionZ],
+      radius: props.radius,
+      startTime: props.startTime,
+      duration: props.duration,
+      densityAmount: props.densityAmount,
+      heatAmount: props.heatAmount,
+      fuelAmount: props.fuelAmount,
+      reactionAmount: props.reactionAmount,
+      expansionSpeed: props.expansionSpeed,
+      liftSpeed: props.liftSpeed,
+      turbulenceSpeed: props.turbulenceSpeed,
+      falloff: props.falloff,
+      noiseScale: props.noiseScale,
+      noiseMix: props.noiseMix,
       seed: props.seed,
     }
   }
@@ -116,6 +138,10 @@ function gravityFromRuntimeParams(params: SimulationRuntimeParams): GravityNodeP
 function vorticityFromRuntimeParams(params: SimulationRuntimeParams): VorticityNodeProps {
   return {
     strength: params.vorticityStrength,
+    constantMask: params.vorticityConstantMask ?? 1,
+    velocityMask: params.vorticityVelocityMask ?? 0.4,
+    heatMask: params.vorticityHeatMask ?? 0.8,
+    densityMask: params.vorticityDensityMask ?? 0.35,
   }
 }
 
@@ -183,6 +209,10 @@ export function runtimeParamsFromNodeStore(
     gravityStrength: store.gravity.strength,
     buoyancy: store.gravity.buoyancy,
     vorticityStrength: store.vorticity.strength,
+    vorticityConstantMask: store.vorticity.constantMask ?? 1,
+    vorticityVelocityMask: store.vorticity.velocityMask ?? 0.4,
+    vorticityHeatMask: store.vorticity.heatMask ?? 0.8,
+    vorticityDensityMask: store.vorticity.densityMask ?? 0.35,
   }
 }
 
@@ -217,6 +247,27 @@ function defaultVelocityProps(): VelocityEmitterNodeProps {
     speed: 30,
     directionX: 0, directionY: 1, directionZ: 0,
     falloff: 0.5,
+    tightness: 0,
+    seed: Math.floor(Math.random() * 65536),
+  }
+}
+
+function defaultBurstProps(): BurstEmitterNodeProps {
+  return {
+    positionX: 0.5, positionY: 0.12, positionZ: 0.5,
+    radius: 0.12,
+    startTime: 0,
+    duration: 0.18,
+    densityAmount: 0.8,
+    heatAmount: 1.0,
+    fuelAmount: 0.45,
+    reactionAmount: 0.55,
+    expansionSpeed: 70,
+    liftSpeed: 18,
+    turbulenceSpeed: 28,
+    falloff: 0.55,
+    noiseScale: 9,
+    noiseMix: 0.55,
     seed: Math.floor(Math.random() * 65536),
   }
 }
@@ -241,6 +292,12 @@ export function addScalarEmitter(label = 'Scalar Emitter'): string {
 export function addVelocityEmitter(label = 'Velocity Emitter'): string {
   const id = `emitter-${emitterCounter++}`
   nodeStore.emitters.push({ id, label, props: { kind: 'velocity', ...defaultVelocityProps() } })
+  return id
+}
+
+export function addBurstEmitter(label = 'Burst Source'): string {
+  const id = `emitter-${emitterCounter++}`
+  nodeStore.emitters.push({ id, label, props: { kind: 'burst', ...defaultBurstProps() } })
   return id
 }
 

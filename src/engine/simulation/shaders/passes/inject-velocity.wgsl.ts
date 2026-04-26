@@ -33,8 +33,8 @@ const MODE_TURBULENT:   f32 = ${MODE_TURBULENT}.0;
 `,
     IndexingWGSL,
     ClampUtilsWGSL,
-    EmitterEnvelopeWGSL,
     EmitterNoiseWGSL,
+    EmitterEnvelopeWGSL,
     /* wgsl */ `
 fn turbulentDir(pos: vec3<f32>, seed: f32) -> vec3<f32> {
   let nx = emitterNoise(pos, 4.0, seed);
@@ -55,20 +55,29 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
   for (var i = 0u; i < arrayLength(&emitterSources); i++) {
     let src  = emitterSources[i];
+    if (!isVelocityInjectSource(src)) { continue; }
+
     let gate = activeGate(src);
     if (gate < 0.0001) { continue; }
 
     let offset = pos - src.positionRadius.xyz;
     let dist   = length(offset);
     let radius = src.positionRadius.w;
-    if (dist > radius) { continue; }
+    if (dist > select(radius, sourceOuterLimit(radius), isBurstSource(src))) { continue; }
 
-    let weight = sphereFalloff(dist, radius, src.velocity.z);
+    let weight = select(sphereFalloff(dist, radius, src.velocity.z), eruptiveSourceFalloff(pos, dist, src, src.velocity.z), isBurstSource(src));
     let speed  = src.velocity.x;
     let mode   = src.velocity.y;
 
     var dir = vec3<f32>(0.0);
-    if (mode == MODE_RADIAL) {
+    if (isBurstSource(src)) {
+      let radial = select(vec3<f32>(0.0, 1.0, 0.0), offset / max(dist, 0.0001), dist > 0.0001);
+      let turbulent = turbulentDir(pos + vec3<f32>(params.time * 0.19, -params.time * 0.13, params.time * 0.07), src._meta.y + 83.0);
+      let burstVelocity = radial * speed + vec3<f32>(0.0, src.velocity.y, 0.0) + turbulent * src.velocity.w;
+      let impulse = burstVelocity * weight * params.deltaTime / sourceDuration(src);
+      vel += impulse;
+      continue;
+    } else if (mode == MODE_RADIAL) {
       dir = select(vec3<f32>(0.0, 1.0, 0.0), offset / max(dist, 0.0001), dist > 0.0001);
     } else if (mode == MODE_DIRECTIONAL) {
       let d = src.direction.xyz;
@@ -77,7 +86,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
       dir = turbulentDir(pos, src._meta.y);
     }
 
-    vel += dir * speed * weight * params.deltaTime;
+    let force = dir * speed * weight * params.deltaTime;
+    let tightness = clamp(src.velocity.w, 0.0, 1.0) * weight;
+    vel = mix(vel + force, dir * speed, tightness);
   }
 
   let voxelSpeedLimit = 80.0 / max(params.dx, 0.001);

@@ -55,6 +55,15 @@ function emitterSummaryRows(props: EmitterNodeProps): { label: string; value: st
     return rows
   }
 
+  if (props.kind === 'burst') {
+    rows.push(
+      { label: 'density', value: props.densityAmount.toFixed(2) },
+      { label: 'heat', value: props.heatAmount.toFixed(2) },
+      { label: 'expand', value: props.expansionSpeed.toFixed(0) },
+    )
+    return rows
+  }
+
   rows.push({ label: 'intensity', value: props.intensity.toFixed(2) })
   return rows
 }

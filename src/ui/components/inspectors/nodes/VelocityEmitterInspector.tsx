@@ -46,6 +46,7 @@ export function VelocityEmitterInspector({ id }: { id: string }) {
       </div>
       <SliderRow label="Speed" value={props.speed} min={0} max={200} step={1} decimals={0} onChange={(v) => set('speed', v)} />
       <SliderRow label="Falloff" value={props.falloff} min={0} max={1} step={0.01} onChange={(v) => set('falloff', v)} />
+      <SliderRow label="Tightness" value={props.tightness ?? 0} min={0} max={1} step={0.01} onChange={(v) => set('tightness', v)} />
 
       {props.mode === 'directional' && (
         <>

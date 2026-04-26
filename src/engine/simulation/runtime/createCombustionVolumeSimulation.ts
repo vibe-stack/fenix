@@ -56,7 +56,7 @@ export function createCombustionVolumeSimulation(
   const sparseLayout = createSparseBrickLayout(resolution)
   const simulationParamsBuffer = device.createBuffer({
     label: 'simulation-params',
-    size: 64,
+    size: 80,
     usage: GPU_BUFFER_UNIFORM | GPU_BUFFER_COPY_DST,
   })
   const scalarA = createScalarFieldBuffers(device, 'scalar-a', voxelCount)
@@ -141,6 +141,7 @@ export function createCombustionVolumeSimulation(
     vorticityMagnitude,
     velocityScratch,
     confinementForceMagnitude,
+    scalarFields,
   )
   const combustion = new CombustionPass(
     device,
@@ -196,6 +197,10 @@ export function createCombustionVolumeSimulation(
   let gravityStrength = options.gravityStrength ?? 0.45
   let buoyancy = 3.6
   let vorticityStrength = 2.15
+  let vorticityConstantMask = 1.0
+  let vorticityVelocityMask = 0.4
+  let vorticityHeatMask = 0.8
+  let vorticityDensityMask = 0.35
   let worldSize = options.worldSize ?? 10.0
 
   function doReset(atSeconds: number) {
@@ -253,6 +258,10 @@ export function createCombustionVolumeSimulation(
           vorticityStrength,
           dx,
           worldSize,
+          vorticityConstantMask,
+          vorticityVelocityMask,
+          vorticityHeatMask,
+          vorticityDensityMask,
         ]),
       )
 
@@ -270,14 +279,13 @@ export function createCombustionVolumeSimulation(
       )
       clear.clear(encoder, activeBrickFlags[nextScalarSet], sparseLayout.brickCount)
       activeBricks.dispatch(encoder, sparseLayout, nextScalarSet)
+      combustion.dispatch(encoder, resolution, nextScalarSet)
       buoyancyPass.dispatch(encoder, resolution, nextScalarSet)
 
       if (simulationStepIndex % performanceSchedule.vorticityInterval === 0) {
         vorticityPass.dispatch(encoder, resolution)
-        confinement.dispatch(encoder, resolution)
+        confinement.dispatch(encoder, resolution, nextScalarSet)
       }
-
-      combustion.dispatch(encoder, resolution, nextScalarSet)
 
       if (simulationStepIndex % performanceSchedule.pressureInterval === 0) {
         pressureSolve.clear(encoder)
@@ -335,6 +343,10 @@ export function createCombustionVolumeSimulation(
         gravityStrength,
         buoyancy,
         vorticityStrength,
+        vorticityConstantMask,
+        vorticityVelocityMask,
+        vorticityHeatMask,
+        vorticityDensityMask,
         worldSize,
       }
     },
@@ -345,6 +357,10 @@ export function createCombustionVolumeSimulation(
       if (params.gravityStrength !== undefined) gravityStrength = params.gravityStrength
       if (params.buoyancy !== undefined) buoyancy = params.buoyancy
       if (params.vorticityStrength !== undefined) vorticityStrength = params.vorticityStrength
+      if (params.vorticityConstantMask !== undefined) vorticityConstantMask = params.vorticityConstantMask
+      if (params.vorticityVelocityMask !== undefined) vorticityVelocityMask = params.vorticityVelocityMask
+      if (params.vorticityHeatMask !== undefined) vorticityHeatMask = params.vorticityHeatMask
+      if (params.vorticityDensityMask !== undefined) vorticityDensityMask = params.vorticityDensityMask
       if (params.worldSize !== undefined) worldSize = params.worldSize
     },
     getQualitySettings() {

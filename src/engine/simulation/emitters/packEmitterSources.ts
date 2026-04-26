@@ -3,6 +3,7 @@ import type { EmitterSource } from './emitterSource'
 const KIND_SCALAR = 0
 const KIND_VELOCITY = 1
 const KIND_IGNITER = 2
+const KIND_BURST = 3
 
 const VELOCITY_MODE_INDEX = { radial: 0, directional: 1, turbulent: 2 } as const
 
@@ -15,7 +16,7 @@ export const FLOATS_PER_EMITTER = 32
  *   [0]  positionRadius: xyz=position, w=radius
  *   [1]  timing:         x=startTime,  y=duration, zw=0
  *   [2]  scalarYields:   x=densityRate, y=heatRate, z=fuelRate, w=0
- *   [3]  velocity:       x=speed, y=modeIndex, z=falloff, w=0
+ *   [3]  velocity:       x=speed/expansion, y=modeIndex/lift, z=falloff, w=tightness/turbulence
  *   [4]  direction:      xyz=direction, w=0
  *   [5]  noise:          x=noiseScale, y=noiseMix, z=intensity, w=0
  *   [6]  padding
@@ -49,10 +50,23 @@ export function packEmitterSources(sources: readonly EmitterSource[]): Float32Ar
       data[o + 12] = src.speed
       data[o + 13] = VELOCITY_MODE_INDEX[src.mode]
       data[o + 14] = src.falloff
+      data[o + 15] = src.tightness ?? 0
       data[o + 16] = src.direction[0]
       data[o + 17] = src.direction[1]
       data[o + 18] = src.direction[2]
       data[o + 28] = KIND_VELOCITY
+    } else if (src.kind === 'burst') {
+      data[o + 8] = src.densityAmount
+      data[o + 9] = src.heatAmount
+      data[o + 10] = src.fuelAmount
+      data[o + 12] = src.expansionSpeed
+      data[o + 13] = src.liftSpeed
+      data[o + 14] = src.falloff
+      data[o + 15] = src.turbulenceSpeed
+      data[o + 20] = src.noiseScale
+      data[o + 21] = src.noiseMix
+      data[o + 22] = src.reactionAmount
+      data[o + 28] = KIND_BURST
     } else {
       data[o + 22] = src.intensity
       data[o + 28] = KIND_IGNITER

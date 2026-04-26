@@ -28,6 +28,7 @@ export interface SimulationHandle {
   setGravityStrength(v: number): void
   setBuoyancy(v: number): void
   setVorticityStrength(v: number): void
+  setVorticityMask(constant: number, velocity: number, heat: number, density: number): void
   setWorldSize(v: number): void
   setSimulationQuality(settings: Partial<SimulationQualitySettings>): void
   updateSources(sources: readonly EmitterSource[]): void

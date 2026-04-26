@@ -16,6 +16,9 @@ export function createApplyVorticityConfinementShader() {
 @group(0) @binding(3) var<storage, read> vorticityMagnitudeField: array<f32>;
 @group(0) @binding(4) var<storage, read_write> velocityField: array<vec4<f32>>;
 @group(0) @binding(5) var<storage, read_write> confinementMagnitudeField: array<f32>;
+@group(0) @binding(6) var<storage, read> densityField: array<f32>;
+@group(0) @binding(7) var<storage, read> temperatureField: array<f32>;
+@group(0) @binding(8) var<storage, read> reactionField: array<f32>;
 `,
     IndexingWGSL,
     ClampUtilsWGSL,
@@ -45,7 +48,16 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
       readMagnitude(vec3<u32>(id.x, id.y, dec(id.z))),
   ) * 0.5;
   let direction = gradient / max(length(gradient), 0.0001);
-  let force = cross(direction, vorticityField[index].xyz) * params.vorticityStrength * 1.45;
+  let hotGas = clamp(temperatureField[index] + reactionField[index] * 0.85, 0.0, 1.0);
+  let mask = clamp(
+    params.vorticityMask.x +
+      smoothstep(0.02, 0.38, vorticityMagnitudeField[index]) * params.vorticityMask.y +
+      smoothstep(0.04, 0.7, hotGas) * params.vorticityMask.z +
+      smoothstep(0.04, 0.65, densityField[index]) * params.vorticityMask.w,
+    0.0,
+    4.0,
+  );
+  let force = cross(direction, vorticityField[index].xyz) * params.vorticityStrength * mask * 1.45;
   var velocity = velocityField[index].xyz + force * params.deltaTime;
   let voxelSpeedLimit = 80.0 / max(params.dx, 0.001);
   velocity = clamp(velocity, vec3<f32>(-voxelSpeedLimit), vec3<f32>(voxelSpeedLimit));

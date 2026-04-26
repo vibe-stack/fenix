@@ -17,7 +17,8 @@ export function VorticityNode({ id, selected }: NodeProps) {
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <PropRow label="strength" value={vorticity.strength.toFixed(2)} />
-        <PropRow label="role" value="confinement" />
+        <PropRow label="heat mask" value={(vorticity.heatMask ?? 0.8).toFixed(2)} />
+        <PropRow label="smoke mask" value={(vorticity.densityMask ?? 0.35).toFixed(2)} />
       </div>
     </NodeShell>
   )

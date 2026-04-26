@@ -2,6 +2,7 @@ import { useSnapshot } from 'valtio'
 import { nodeStore } from '../../../../store/node-store/nodeStore'
 import { ScalarEmitterInspector } from './ScalarEmitterInspector'
 import { VelocityEmitterInspector } from './VelocityEmitterInspector'
+import { BurstEmitterInspector } from './BurstEmitterInspector'
 import { IgniterEmitterInspector } from './IgniterEmitterInspector'
 
 export function EmitterNodeInspector({ id }: { id: string }) {
@@ -11,5 +12,6 @@ export function EmitterNodeInspector({ id }: { id: string }) {
 
   if (emitter.props.kind === 'scalar') return <ScalarEmitterInspector id={id} />
   if (emitter.props.kind === 'velocity') return <VelocityEmitterInspector id={id} />
+  if (emitter.props.kind === 'burst') return <BurstEmitterInspector id={id} />
   return <IgniterEmitterInspector id={id} />
 }

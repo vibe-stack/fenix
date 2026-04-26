@@ -1,11 +1,12 @@
 import { createComputePipeline } from '../../../gpu/pipelines/createComputePipeline'
 import type { VolumeResolution } from '../../common/volumeResolution'
 import { createApplyVorticityConfinementShader } from '../../shaders/passes/apply-vorticity-confinement.wgsl'
+import type { ScalarFieldBuffers } from '../combustion-volume-simulation/types'
 import { createComputeResources } from '../shared/createComputeResources'
 import { dispatchVolume } from '../shared/createVolumeDispatch'
 
 export class VorticityConfinementPass {
-  private readonly resources: ReturnType<typeof createComputeResources>
+  private readonly resources: [ReturnType<typeof createComputeResources>, ReturnType<typeof createComputeResources>]
 
   constructor(
     device: GPUDevice,
@@ -15,6 +16,7 @@ export class VorticityConfinementPass {
     vorticityMagnitude: GPUBuffer,
     velocity: GPUBuffer,
     confinementMagnitude: GPUBuffer,
+    fields: readonly [ScalarFieldBuffers, ScalarFieldBuffers],
   ) {
     const pipeline = createComputePipeline(
       device,
@@ -22,17 +24,22 @@ export class VorticityConfinementPass {
       'apply-vorticity-confinement-shader',
       createApplyVorticityConfinementShader(),
     )
-    this.resources = createComputeResources(device, pipeline, 'vorticity-confinement-bind-group', [
-      simulationParams,
-      volumeInfo,
-      vorticity,
-      vorticityMagnitude,
-      velocity,
-      confinementMagnitude,
-    ])
+    this.resources = fields.map((field) =>
+      createComputeResources(device, pipeline, `${field.density.label}-vorticity-confinement`, [
+        simulationParams,
+        volumeInfo,
+        vorticity,
+        vorticityMagnitude,
+        velocity,
+        confinementMagnitude,
+        field.density,
+        field.temperature,
+        field.reaction,
+      ]),
+    ) as typeof this.resources
   }
 
-  dispatch(encoder: GPUCommandEncoder, resolution: VolumeResolution) {
-    dispatchVolume(encoder, 'apply-vorticity-confinement-pass', this.resources, resolution)
+  dispatch(encoder: GPUCommandEncoder, resolution: VolumeResolution, scalarSet: number) {
+    dispatchVolume(encoder, 'apply-vorticity-confinement-pass', this.resources[scalarSet], resolution)
   }
 }

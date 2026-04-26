@@ -29,6 +29,27 @@ export interface VelocityEmitterNodeProps {
   directionY: number
   directionZ: number
   falloff: number       // 0=top-hat, 1=gaussian
+  tightness?: number    // 0=additive force, 1=locally replace velocity
+  seed: number
+}
+
+export interface BurstEmitterNodeProps {
+  positionX: number
+  positionY: number
+  positionZ: number
+  radius: number
+  startTime: number
+  duration: number
+  densityAmount: number
+  heatAmount: number
+  fuelAmount: number
+  reactionAmount: number
+  expansionSpeed: number
+  liftSpeed: number
+  turbulenceSpeed: number
+  falloff: number
+  noiseScale: number
+  noiseMix: number
   seed: number
 }
 
@@ -43,11 +64,12 @@ export interface IgniterEmitterNodeProps {
   seed: number
 }
 
-export type EmitterKind = 'scalar' | 'velocity' | 'igniter'
+export type EmitterKind = 'scalar' | 'velocity' | 'burst' | 'igniter'
 
 export type EmitterNodeProps =
   | ({ kind: 'scalar' } & ScalarEmitterNodeProps)
   | ({ kind: 'velocity' } & VelocityEmitterNodeProps)
+  | ({ kind: 'burst' } & BurstEmitterNodeProps)
   | ({ kind: 'igniter' } & IgniterEmitterNodeProps)
 
 export interface CombustionNodeProps {
@@ -84,6 +106,10 @@ export interface GravityNodeProps {
 
 export interface VorticityNodeProps {
   strength: number
+  constantMask?: number
+  velocityMask?: number
+  heatMask?: number
+  densityMask?: number
 }
 
 export interface LightNodeProps {

@@ -124,6 +124,7 @@ export class SourceInjectionPass {
         this.sourceBuffer,
         f.reaction,
         f.temperature,
+        f.fuel,
       ]),
     ) as [ReturnType<typeof createComputeResources>, ReturnType<typeof createComputeResources>]
   }

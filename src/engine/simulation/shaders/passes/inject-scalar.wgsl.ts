@@ -26,8 +26,8 @@ export function createInjectScalarShader() {
 `,
     IndexingWGSL,
     ClampUtilsWGSL,
-    EmitterEnvelopeWGSL,
     EmitterNoiseWGSL,
+    EmitterEnvelopeWGSL,
     /* wgsl */ `
 @compute @workgroup_size(${WORKGROUP_SIZE}, ${WORKGROUP_SIZE}, ${WORKGROUP_SIZE})
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
@@ -43,18 +43,21 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
   for (var i = 0u; i < arrayLength(&emitterSources); i++) {
     let src  = emitterSources[i];
+    if (!isScalarInjectSource(src)) { continue; }
+
     let gate = activeGate(src);
     if (gate < 0.0001) { continue; }
 
     let offset = pos - src.positionRadius.xyz;
     let dist   = length(offset);
     let radius = src.positionRadius.w;
-    if (dist > radius) { continue; }
+    if (dist > sourceOuterLimit(radius)) { continue; }
 
-    let weight  = sphereFalloff(dist, radius, 0.5);
+    let weight  = eruptiveSourceFalloff(pos, dist, src, 0.5);
     let noise   = emitterNoise(pos, src.noise.x, src._meta.y);
     let modulation = mix(1.0, noise, clamp(src.noise.y, 0.0, 1.0));
-    let contribution = weight * modulation * params.deltaTime;
+    let releaseRate = select(1.0, 1.0 / sourceDuration(src), isBurstSource(src));
+    let contribution = weight * modulation * releaseRate * params.deltaTime;
 
     density     = clamp01(density     + src.scalarYields.x * contribution);
     temperature = clamp01(temperature + src.scalarYields.y * contribution);

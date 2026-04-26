@@ -146,6 +146,10 @@ export function parseGraphJson(raw: string): SerializedGraph {
       strength: graph.runtimeParams.vorticityStrength,
     }
   }
+  graph.vorticity.constantMask ??= graph.runtimeParams.vorticityConstantMask ?? 1
+  graph.vorticity.velocityMask ??= graph.runtimeParams.vorticityVelocityMask ?? 0.4
+  graph.vorticity.heatMask ??= graph.runtimeParams.vorticityHeatMask ?? 0.8
+  graph.vorticity.densityMask ??= graph.runtimeParams.vorticityDensityMask ?? 0.35
   graph.simulationQuality = createSimulationQualitySettings(graph.simulationQuality)
   return graph
 }
