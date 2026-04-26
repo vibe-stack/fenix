@@ -1,6 +1,7 @@
 import { proxy } from 'valtio'
 import type { XYPosition } from '@xyflow/react'
 import { defaultNewFilePresetId, getNewFilePreset } from '../../editor/presets/newFilePresets'
+import type { NewFilePreset, PresetGraphEdge } from '../../editor/presets/types'
 
 export interface GraphEdge {
   id: string
@@ -11,6 +12,11 @@ export interface GraphEdge {
 }
 
 export interface NodeGraphStoreState {
+  nodePositions: Record<string, XYPosition>
+  edges: GraphEdge[]
+}
+
+export interface SerializedNodeGraphState {
   nodePositions: Record<string, XYPosition>
   edges: GraphEdge[]
 }
@@ -72,12 +78,33 @@ function createLightPositions(lightCount: number): Record<string, XYPosition> {
   )
 }
 
-function createGraphState(emitterCount: number, lightCount: number): NodeGraphStoreState {
-  const emitterEdges = Array.from({ length: emitterCount }, (_, index) => ({
-    id: `emitter-${index}->combustion`,
-    source: `emitter-${index}`,
-    target: 'combustion',
-  }))
+function presetGraphEdgesToGraphEdges(graphEdges: readonly PresetGraphEdge[] | undefined): GraphEdge[] {
+  if (!graphEdges) return []
+
+  return graphEdges.map((edge) => {
+    const source = `emitter-${edge.source}`
+    const target = edge.target === 'combustion' ? 'combustion' : `emitter-${edge.target}`
+
+    return {
+      id: `${source}->${target}`,
+      source,
+      target,
+    }
+  })
+}
+
+function createGraphState(
+  emitterCount: number,
+  lightCount: number,
+  graphEdges?: readonly PresetGraphEdge[],
+): NodeGraphStoreState {
+  const emitterEdges = graphEdges
+    ? presetGraphEdgesToGraphEdges(graphEdges)
+    : Array.from({ length: emitterCount }, (_, index) => ({
+        id: `emitter-${index}->combustion`,
+        source: `emitter-${index}`,
+        target: 'combustion',
+      }))
   const lightEdges = Array.from({ length: lightCount }, (_, index) => ({
     id: `light-${index}->render-output`,
     source: `light-${index}`,
@@ -95,18 +122,47 @@ function createGraphState(emitterCount: number, lightCount: number): NodeGraphSt
 }
 
 const defaultPreset = getNewFilePreset(defaultNewFilePresetId)
-const defaultGraphState = createGraphState(defaultPreset.emitters.length, defaultPreset.lights.length)
+const defaultGraphState = createGraphState(
+  defaultPreset.emitters.length,
+  defaultPreset.lights.length,
+  defaultPreset.graphEdges,
+)
 
 export const nodeGraphStore = proxy<NodeGraphStoreState>({
   nodePositions: defaultGraphState.nodePositions,
   edges: defaultGraphState.edges,
 })
 
-export function resetNodeGraph(emitterCount: number, lightCount: number) {
-  const nextState = createGraphState(emitterCount, lightCount)
+export function resetNodeGraph(preset: NewFilePreset): void
+export function resetNodeGraph(emitterCount: number, lightCount: number): void
+export function resetNodeGraph(presetOrEmitterCount: NewFilePreset | number, lightCount?: number) {
+  const nextState = typeof presetOrEmitterCount === 'number'
+    ? createGraphState(presetOrEmitterCount, lightCount ?? 0)
+    : createGraphState(
+        presetOrEmitterCount.emitters.length,
+        presetOrEmitterCount.lights.length,
+        presetOrEmitterCount.graphEdges,
+      )
 
   nodeGraphStore.nodePositions = nextState.nodePositions
   nodeGraphStore.edges = nextState.edges
+}
+
+export function applyNodeGraphState(graph: SerializedNodeGraphState) {
+  nodeGraphStore.nodePositions = { ...graph.nodePositions }
+  nodeGraphStore.edges = graph.edges.map((edge) => ({ ...edge }))
+}
+
+export function snapshotNodeGraph(): SerializedNodeGraphState {
+  return {
+    nodePositions: Object.fromEntries(
+      Object.entries(nodeGraphStore.nodePositions).map(([id, position]) => [
+        id,
+        { x: position.x, y: position.y },
+      ]),
+    ),
+    edges: nodeGraphStore.edges.map((edge) => ({ ...edge })),
+  }
 }
 
 export function setNodePosition(id: string, position: XYPosition) {

@@ -5,7 +5,11 @@ import {
   nodeStore,
   runtimeParamsFromNodeStore,
 } from '../../../store/node-store/nodeStore'
-import { resetNodeGraph } from '../../../store/node-store/nodeGraphStore'
+import {
+  applyNodeGraphState,
+  resetNodeGraph,
+  snapshotNodeGraph,
+} from '../../../store/node-store/nodeGraphStore'
 import { useEditorDispatch, useEditorStore } from '../../hooks/useEditorStore'
 import { useSimulationHandle } from '../../../features/viewport/SimulationHandleContext'
 import {
@@ -34,7 +38,7 @@ export function NewFileButton() {
     loadEmitterPreset(preset)
     loadLightPreset(preset)
     loadRuntimeNodePreset(preset)
-    resetNodeGraph(preset.emitters.length, preset.lights.length)
+    resetNodeGraph(preset)
     Object.assign(nodeStore.renderOutput, {
       displayMode: 'temperature',
       stepCount: 400,
@@ -139,6 +143,7 @@ export function SaveGraphButton() {
       snap.vorticity,
       snap.renderOutput,
       qualitySettings,
+      snapshotNodeGraph(),
     )
     downloadGraphAsJson(graph)
   }
@@ -170,7 +175,11 @@ function applySerializedGraph(
   nodeStore.gravity = { ...graph.gravity }
   nodeStore.vorticity = { ...graph.vorticity }
   Object.assign(nodeStore.renderOutput, graph.renderOutput)
-  resetNodeGraph(graph.emitters.length, graph.lights.length)
+  if (graph.graph) {
+    applyNodeGraphState(graph.graph)
+  } else {
+    resetNodeGraph(graph.emitters.length, graph.lights.length)
+  }
   dispatch({
     type: 'simulation/set-runtime-params',
     params: {

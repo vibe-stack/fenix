@@ -13,8 +13,9 @@ import {
   type SimulationQualitySettings,
   type SimulationRuntimeParams,
 } from '../../engine/simulation/runtime/combustion-volume-simulation/types'
+import type { SerializedNodeGraphState } from '../../store/node-store/nodeGraphStore'
 
-export const GRAPH_FILE_VERSION = 2
+export const GRAPH_FILE_VERSION = 3
 
 export interface SerializedEmitter {
   id: string
@@ -40,6 +41,7 @@ export interface SerializedGraph {
   vorticity: VorticityNodeProps
   renderOutput: RenderOutputNodeProps
   simulationQuality: SimulationQualitySettings
+  graph?: SerializedNodeGraphState
 }
 
 export function serializeGraph(
@@ -53,6 +55,7 @@ export function serializeGraph(
   vorticity: VorticityNodeProps,
   renderOutput: RenderOutputNodeProps,
   simulationQuality: SimulationQualitySettings,
+  graph?: SerializedNodeGraphState,
 ): SerializedGraph {
   return {
     version: GRAPH_FILE_VERSION,
@@ -70,6 +73,17 @@ export function serializeGraph(
     vorticity: { ...vorticity },
     renderOutput: { ...renderOutput },
     simulationQuality: { ...simulationQuality },
+    graph: graph
+      ? {
+          nodePositions: Object.fromEntries(
+            Object.entries(graph.nodePositions).map(([id, position]) => [
+              id,
+              { x: position.x, y: position.y },
+            ]),
+          ),
+          edges: graph.edges.map((edge) => ({ ...edge })),
+        }
+      : undefined,
   }
 }
 
@@ -101,7 +115,7 @@ export function parseGraphJson(raw: string): SerializedGraph {
     )
   }
 
-  if (obj['version'] !== GRAPH_FILE_VERSION) {
+  if (obj['version'] !== GRAPH_FILE_VERSION && obj['version'] !== 2) {
     throw new Error(
       `Unsupported graph version: ${obj['version']}. Expected ${GRAPH_FILE_VERSION}.`,
     )
@@ -151,5 +165,11 @@ export function parseGraphJson(raw: string): SerializedGraph {
   graph.vorticity.heatMask ??= graph.runtimeParams.vorticityHeatMask ?? 0.8
   graph.vorticity.densityMask ??= graph.runtimeParams.vorticityDensityMask ?? 0.35
   graph.simulationQuality = createSimulationQualitySettings(graph.simulationQuality)
+  if (graph.graph) {
+    graph.graph = {
+      nodePositions: { ...graph.graph.nodePositions },
+      edges: graph.graph.edges.map((edge) => ({ ...edge })),
+    }
+  }
   return graph
 }

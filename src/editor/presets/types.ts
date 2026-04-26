@@ -17,8 +17,14 @@ export interface NewFilePreset {
   description: string
   emitters: readonly PresetEmitter[]
   lights: readonly PresetLight[]
+  graphEdges?: readonly PresetGraphEdge[]
   runtimeParams: SimulationRuntimeParams
   renderOutput: Partial<RenderOutputNodeProps>
+}
+
+export interface PresetGraphEdge {
+  source: number
+  target: number | 'combustion'
 }
 
 export function createScalarEmitter(label: string, props: import('../../engine/graph/schema/nodeProps').ScalarEmitterNodeProps): PresetEmitter {

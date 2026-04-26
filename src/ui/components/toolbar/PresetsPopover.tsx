@@ -26,7 +26,7 @@ export function PresetsPopover() {
     loadEmitterPreset(preset)
     loadLightPreset(preset)
     loadRuntimeNodePreset(preset)
-    resetNodeGraph(preset.emitters.length, preset.lights.length)
+    resetNodeGraph(preset)
     Object.assign(nodeStore.renderOutput, {
       displayMode: 'temperature',
       stepCount: 400,

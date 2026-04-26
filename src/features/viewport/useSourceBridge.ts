@@ -1,11 +1,13 @@
 import { useEffect } from 'react'
 import { subscribe } from 'valtio'
 import type { SimulationHandle } from '../../engine/core/types/platform'
-import { nodeStore, emitterPropsToSource } from '../../store/node-store/nodeStore'
+import { nodeStore } from '../../store/node-store/nodeStore'
+import { nodeGraphStore } from '../../store/node-store/nodeGraphStore'
+import { resolveEmitterSources } from '../../store/node-store/sourceGraph'
 import type { EmitterSource } from '../../engine/simulation/emitters/emitterSource'
 
 function emittersToSources(): readonly EmitterSource[] {
-  return nodeStore.emitters.map((e) => emitterPropsToSource(e.props))
+  return resolveEmitterSources(nodeStore.emitters, nodeGraphStore.edges)
 }
 
 export function useSourceBridge(handle: SimulationHandle | null) {
@@ -15,6 +17,12 @@ export function useSourceBridge(handle: SimulationHandle | null) {
     const unsub = subscribe(nodeStore, () => {
       handle.updateSources(emittersToSources())
     })
-    return unsub
+    const unsubGraph = subscribe(nodeGraphStore, () => {
+      handle.updateSources(emittersToSources())
+    })
+    return () => {
+      unsub()
+      unsubGraph()
+    }
   }, [handle])
 }

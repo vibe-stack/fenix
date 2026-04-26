@@ -20,7 +20,6 @@ export function EmitterNode({ id, data, selected }: NodeProps) {
       label={d.label as string}
       category="Emitter"
       selected={!!selected}
-      hasInput={false}
       accentColor="#f97c3a"
     >
       {emitter && (
